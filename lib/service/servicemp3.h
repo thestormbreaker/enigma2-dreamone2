@@ -18,7 +18,7 @@ class eServiceFactoryMP3: public iServiceHandler
 public:
 	eServiceFactoryMP3();
 	virtual ~eServiceFactoryMP3();
-	enum { id = 0x1001 };
+	enum { id = eServiceReference::idServiceMP3 };
 
 		// iServiceHandler
 	RESULT play(const eServiceReference &, ePtr<iPlayableService> &ptr);
@@ -26,6 +26,7 @@ public:
 	RESULT list(const eServiceReference &, ePtr<iListableService> &ptr);
 	RESULT info(const eServiceReference &, ePtr<iStaticServiceInformation> &ptr);
 	RESULT offlineOperations(const eServiceReference &, ePtr<iServiceOfflineOperations> &ptr);
+	gint m_eServicemp3_counter;
 private:
 	ePtr<eStaticServiceMP3Info> m_service_info;
 };
@@ -116,9 +117,9 @@ public:
 
 typedef struct _GstElement GstElement;
 
-typedef enum { atUnknown, atMPEG, atMP3, atAC3, atDTS, atAAC, atPCM, atOGG, atFLAC, atWMA } audiotype_t;
+typedef enum { atUnknown, atMPEG, atMP3, atAC3, atDTS, atAAC, atPCM, atOGG, atFLAC, atWMA, atDRA } audiotype_t;
 typedef enum { stUnknown, stPlainText, stSSA, stASS, stSRT, stVOB, stPGS } subtype_t;
-typedef enum { ctNone, ctMPEGTS, ctMPEGPS, ctMKV, ctAVI, ctMP4, ctVCD, ctCDA, ctASF, ctOGG, ctWEBM } containertype_t;
+typedef enum { ctNone, ctMPEGTS, ctMPEGPS, ctMKV, ctAVI, ctMP4, ctVCD, ctCDA, ctASF, ctOGG, ctWEBM, ctDRA } containertype_t;
 
 class eServiceMP3: public iPlayableService, public iPauseableService,
 	public iServiceInformation, public iSeekableService, public iAudioTrackSelection, public iAudioChannelSelection,
@@ -149,7 +150,6 @@ public:
 	RESULT frontendInfo(ePtr<iFrontendInformation> &ptr) { ptr = 0; return -1; }
 	RESULT subServices(ePtr<iSubserviceList> &ptr) { ptr = 0; return -1; }
 	RESULT timeshift(ePtr<iTimeshiftService> &ptr) { ptr = 0; return -1; }
-	RESULT tap(ePtr<iTapService> &ptr) { ptr = nullptr; return -1; };
 //	RESULT cueSheet(ePtr<iCueSheet> &ptr) { ptr = 0; return -1; }
 
 		// iCueSheet
@@ -211,6 +211,11 @@ public:
 	void setAC3Delay(int);
 	void setPCMDelay(int);
 
+#if HAVE_AMLOGIC
+	void AmlSwitchAudio(int index);
+	unsigned int get_pts_pcrscr(void);
+#endif
+
 	struct audioStream
 	{
 		GstPad* pad;
@@ -236,11 +241,12 @@ public:
 	{
 		audiotype_t audiotype;
 		containertype_t containertype;
-		bool is_video;
-		bool is_streaming;
-		bool is_hls;
+		gboolean is_audio;
+		gboolean is_video;
+		gboolean is_streaming;
+		gboolean is_hls;
 		sourceStream()
-			:audiotype(atUnknown), containertype(ctNone), is_video(FALSE), is_streaming(FALSE), is_hls(FALSE)
+			:audiotype(atUnknown), containertype(ctNone), is_audio(FALSE), is_video(FALSE), is_streaming(FALSE), is_hls(FALSE)
 		{
 		}
 	};
@@ -302,15 +308,24 @@ private:
 	int m_buffer_size;
 	int m_ignore_buffering_messages;
 	bool m_is_live;
+	bool m_subtitles_paused;
 	bool m_use_prefillbuffer;
 	bool m_paused;
+	bool m_first_paused;
 	/* cuesheet load check */
 	bool m_cuesheet_loaded;
+	bool m_audiosink_not_running;
 	/* servicemMP3 chapter TOC support CVR */
 #if GST_VERSION_MAJOR >= 1
 	bool m_use_chapter_entries;
 	/* last used seek position gst-1 only */
 	gint64 m_last_seek_pos;
+	pts_t m_media_lenght;
+	ePtr<eTimer> m_play_position_timer;
+	void playPositionTiming();
+	gint m_last_seek_count;
+	bool m_seeking_or_paused;
+	bool m_to_paused;
 #endif
 	bufferInfo m_bufferInfo;
 	errorInfo m_errorInfo;
@@ -322,7 +337,7 @@ private:
 		stIdle, stRunning, stStopped,
 	};
 	int m_state;
-	GstElement *m_gst_playbin, *audioSink, *videoSink;
+	GstElement *m_gst_playbin;
 	GstTagList *m_stream_tags;
 	bool m_coverart;
 
@@ -364,7 +379,6 @@ private:
 	subtitle_pages_map_t m_subtitle_pages;
 	ePtr<eTimer> m_subtitle_sync_timer;
 
-	ePtr<eTimer> m_streamingsrc_timeout;
 	pts_t m_prev_decoder_time;
 	int m_decoder_time_valid_state;
 
@@ -372,11 +386,11 @@ private:
 	void pullSubtitle(GstBuffer *buffer);
 	void sourceTimeout();
 	sourceStream m_sourceinfo;
-	gulong m_subs_to_pull_handler_id;
+	gulong m_subs_to_pull_handler_id, m_notify_source_handler_id, m_notify_element_added_handler_id;
 
 	RESULT seekToImpl(pts_t to);
 
-	gint m_aspect, m_width, m_height, m_framerate, m_progressive;
+	gint m_aspect, m_width, m_height, m_framerate, m_progressive, m_gamma;
 	std::string m_useragent;
 	std::string m_extra_headers;
 	RESULT trickSeek(gdouble ratio);

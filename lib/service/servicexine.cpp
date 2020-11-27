@@ -66,7 +66,7 @@ RESULT eServiceFactoryXine::info(const eServiceReference &ref, ePtr<iStaticServi
 
 RESULT eServiceFactoryXine::offlineOperations(const eServiceReference &, ePtr<iServiceOfflineOperations> &ptr)
 {
-	ptr = nullptr;
+	ptr = 0;
 	return -1;
 }
 
