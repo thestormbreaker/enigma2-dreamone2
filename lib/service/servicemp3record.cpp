@@ -9,6 +9,8 @@
 #include <gst/gst.h>
 #include <gst/pbutils/missing-plugins.h>
 
+#include <fstream>
+
 #define HTTP_TIMEOUT 60
 
 DEFINE_REF(eServiceMP3Record);
@@ -27,6 +29,9 @@ eServiceMP3Record::eServiceMP3Record(const eServiceReference &ref):
 
 	CONNECT(m_pump.recv_msg, eServiceMP3Record::gstPoll);
 	CONNECT(m_streamingsrc_timeout->timeout, eServiceMP3Record::sourceTimeout);
+	if (eConfigManager::getConfigBoolValue("config.mediaplayer.useAlternateUserAgent"))
+		m_useragent = eConfigManager::getConfigValue("config.mediaplayer.alternateUserAgent");
+	eDebug("[eMP3ServiceRecord] m_useragent=%s", m_useragent.c_str());
 }
 
 eServiceMP3Record::~eServiceMP3Record()
@@ -127,8 +132,11 @@ RESULT eServiceMP3Record::stop()
 
 int eServiceMP3Record::doPrepare()
 {
+	eDebug("[eMP3ServiceRecord] doPrepare");
+
 	if (m_state == stateIdle)
 	{
+		eDebug("[eMP3ServiceRecord] stateIdle");
 		gchar *uri;
 		size_t pos = m_ref.path.find('#');
 		std::string stream_uri;
@@ -147,7 +155,6 @@ int eServiceMP3Record::doPrepare()
 				else
 					m_useragent = m_extra_headers.substr(hpos_start);
 			}
-
 		}
 		else
 		{
@@ -198,6 +205,7 @@ int eServiceMP3Record::doRecord()
 	int err = doPrepare();
 	if (err)
 	{
+		eDebug("[eMP3ServiceRecord] err");
 		m_error = errMisconfiguration;
 		m_event((iRecordableService*)this, evRecordFailed);
 		return err;
@@ -211,6 +219,7 @@ int eServiceMP3Record::doRecord()
 		return -1;
 	}
 
+	eDebug("[eMP3ServiceRecord] recording");
 	m_state = stateRecording;
 	m_error = 0;
 	m_event((iRecordableService*)this, evRecordRunning);
@@ -241,6 +250,44 @@ void eServiceMP3Record::sourceTimeout()
 	m_event((iRecordableService*)this, evRecordFailed);
 }
 
+void eServiceMP3Record::restartRecordingFromEos()
+{
+	eDebug("[eMP3ServiceRecordMod] restartRecordingFromEos");
+
+	// remove any .metaeit if there
+	if(m_filename.find(".metaeit") != std::string::npos)
+	{
+		eDebug("[eMP3ServiceRecordMod] removing .metaeit from current filename=%s", m_filename.c_str());
+		m_filename = m_filename.replace(m_filename.find(".metaeit"),8,"");
+	}
+
+	std::string oldFilename = m_filename;
+	eDebug("[eMP3ServiceRecordMod] current filename=%s", oldFilename.c_str());
+	m_filename = m_filename.replace(m_filename.find(".stream"),7,"_001.stream");
+	eDebug("[eMP3ServiceRecordMod] new filename=%s", m_filename.c_str());
+
+	m_state = stateIdle;
+	start(false);
+
+	//copy eit
+	std::string cureit = oldFilename.replace(oldFilename.find(".stream"),7,".streameit");
+	std::string neweit = m_filename.replace(m_filename.find(".stream"),7,".streameit");
+	std::ifstream srceit(cureit.c_str(), std::ios::binary);
+	std::ofstream dsteit(neweit.c_str(), std::ios::binary);
+	dsteit << srceit.rdbuf();
+	eDebug("[eMP3ServiceRecordMod] copied eit");
+
+	//copy meta
+	std::string curmeta = oldFilename.replace(oldFilename.find(".stream"),7,".stream.meta");
+	std::string newmeta = m_filename.replace(m_filename.find(".stream"),7,".stream.meta");
+	std::ifstream srcmeta(curmeta.c_str(), std::ios::binary);
+	std::ofstream dstmeta(newmeta.c_str(), std::ios::binary);
+	dstmeta << srcmeta.rdbuf();
+	eDebug("[eMP3ServiceRecordMod] copied meta");
+
+	eDebug("[eMP3ServiceRecordMod] ~restartRecordingFromEos");
+}
+
 void eServiceMP3Record::gstBusCall(GstMessage *msg)
 {
 	if (!msg)
@@ -257,7 +304,8 @@ void eServiceMP3Record::gstBusCall(GstMessage *msg)
 		case GST_MESSAGE_EOS:
 			eDebug("[eMP3ServiceRecord] gstBusCall eos event");
 			// Stream end -> stop recording
-			m_event((iRecordableService*)this, evGstRecordEnded);
+			//m_event((iRecordableService*)this, evGstRecordEnded);
+			restartRecordingFromEos();
 			break;
 		case GST_MESSAGE_STATE_CHANGED:
 		{

@@ -21,7 +21,7 @@ class eServiceFactoryDVB: public iServiceHandler
 public:
 	eServiceFactoryDVB();
 	virtual ~eServiceFactoryDVB();
-	enum { id = eServiceReference::idDVB };
+	enum { id = 0x1 };
 
 		// iServiceHandler
 	RESULT play(const eServiceReference &, ePtr<iPlayableService> &ptr);
@@ -86,7 +86,7 @@ class eDVBServicePlay: public eDVBServiceBase,
 		public iPlayableService, public iPauseableService,
 		public iSeekableService, public sigc::trackable, public iServiceInformation,
 		public iAudioTrackSelection, public iAudioChannelSelection,
-		public iSubserviceList, public iTimeshiftService,
+		public iSubserviceList, public iTimeshiftService, public iTapService,
 		public iCueSheet, public iSubtitleOutput, public iAudioDelay,
 		public iRdsDecoder, public iStreamableService,
 		public iStreamedService
@@ -109,11 +109,12 @@ public:
 	RESULT frontendInfo(ePtr<iFrontendInformation> &ptr);
 	RESULT subServices(ePtr<iSubserviceList> &ptr);
 	RESULT timeshift(ePtr<iTimeshiftService> &ptr);
+	RESULT tap(ePtr<iTapService> &ptr);
 	RESULT cueSheet(ePtr<iCueSheet> &ptr);
 	RESULT subtitle(ePtr<iSubtitleOutput> &ptr);
 	RESULT audioDelay(ePtr<iAudioDelay> &ptr);
 	RESULT rdsDecoder(ePtr<iRdsDecoder> &ptr);
-	RESULT keys(ePtr<iServiceKeys> &ptr) { ptr = 0; return -1; }
+	RESULT keys(ePtr<iServiceKeys> &ptr) { ptr = nullptr; return -1; }
 
 		// iStreamedService
 	RESULT streamed(ePtr<iStreamedService> &ptr);
@@ -142,7 +143,6 @@ public:
 	std::string getInfoString(int w);
 	ePtr<iDVBTransponderData> getTransponderData();
 	void getAITApplications(std::map<int, std::string> &aitlist);
-	PyObject * getHbbTVApplications();
 	void getCaIds(std::vector<int> &caids, std::vector<int> &ecmpids, std::vector<std::string> &ecmdatabytes);
 
 		// iAudioTrackSelection
@@ -176,6 +176,10 @@ public:
 	std::string getTimeshiftFilename();
 	void switchToLive();
 
+		// iTapService
+	bool startTapToFD(int fd, const std::vector<int> &pids, int packetsize = 188);
+	void stopTapToFD();
+
 		// iCueSheet
 	PyObject *getCutList();
 	void setCutList(SWIG_PYOBJECT(ePyObject));
@@ -196,7 +200,6 @@ public:
 		// iStreamableService
 	RESULT stream(ePtr<iStreamableService> &ptr);
 	ePtr<iStreamData> getStreamingData();
-
 	void setQpipMode(bool value, bool audio);
 
 protected:
@@ -255,6 +258,10 @@ protected:
 	int m_skipmode;
 	int m_fastforward;
 	int m_slowmotion;
+
+		/* tap */
+
+	ePtr<iDVBTSRecorder> m_tap_recorder;
 
 		/* cuesheet */
 
