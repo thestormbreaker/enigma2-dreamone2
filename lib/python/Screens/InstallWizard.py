@@ -1,3 +1,4 @@
+import os
 from Screens.Screen import Screen
 from Components.ConfigList import ConfigListScreen
 from Components.Sources.StaticText import StaticText
@@ -16,8 +17,7 @@ class InstallWizard(Screen, ConfigListScreen):
 
 	STATE_UPDATE = 0
 	STATE_CHOISE_CHANNELLIST = 1
-#	INSTALL_PLUGINS = 2
-	INSTALL_SKINS = 3
+# 	STATE_CHOISE_SOFTCAM = 2
 
 	def __init__(self, session, args = None):
 		Screen.__init__(self, session)
@@ -38,7 +38,7 @@ class InstallWizard(Screen, ConfigListScreen):
 					if iNetwork.getAdapterAttribute(x[1], 'up'):
 						self.ipConfigEntry = ConfigIP(default = iNetwork.getAdapterAttribute(x[1], "ip"))
 						iNetwork.checkNetworkState(self.checkNetworkCB)
-						is_found = True
+						if_found = True
 					else:
 						iNetwork.restartNetwork(self.checkNetworkLinkCB)
 					break
@@ -46,15 +46,14 @@ class InstallWizard(Screen, ConfigListScreen):
 				self.createMenu()
 		elif self.index == self.STATE_CHOISE_CHANNELLIST:
 			self.enabled = ConfigYesNo(default = True)
-			modes = {"19e": "Astra 1", "23e": "Astra 3", "19e-23e": "Astra 1 Astra 3", "19e-23e-28e": "Astra 1 Astra 2 Astra 3", "13e-19e-23e-28e": "Astra 1 Astra 2 Astra 3 Hotbird"}
-			self.channellist_type = ConfigSelection(choices = modes, default = "19e")
+			modes = {"default": _("default Astra (13e-19e)"),"scan": _("scan new")}
+			self.channellist_type = ConfigSelection(choices = modes, default = "default")
 			self.createMenu()
-#		elif self.index == self.INSTALL_PLUGINS:
-#			self.enabled = ConfigYesNo(default = True)
-#			self.createMenu()
-		elif self.index == self.INSTALL_SKINS:
-			self.enabled = ConfigYesNo(default = True)
-			self.createMenu()
+# 		elif self.index == self.STATE_CHOISE_SOFTCAM:
+# 			self.enabled = ConfigYesNo(default = True)
+# 			modes = {"cccam": _("default") + " (CCcam)", "scam": "scam"}
+# 			self.softcam_type = ConfigSelection(choices = modes, default = "cccam")
+# 			self.createMenu()
 
 	def checkNetworkCB(self, data):
 		if data < 3:
@@ -73,19 +72,19 @@ class InstallWizard(Screen, ConfigListScreen):
 		except:
 			return
 		self.list = []
-		if self.index == self.STATE_UPDATE:
-			if config.misc.installwizard.hasnetwork.value:
-				self.list.append(getConfigListEntry(_("Your internet connection is working (ip: %s)") % (self.ipConfigEntry.getText()), self.enabled))
-			else:
-				self.list.append(getConfigListEntry(_("Your receiver does not have an internet connection"), self.enabled))
-		elif self.index == self.STATE_CHOISE_CHANNELLIST:
-			self.list.append(getConfigListEntry(_("Install channel list"), self.enabled))
-			if self.enabled.value:
-				self.list.append(getConfigListEntry(_("Channel list type"), self.channellist_type))
-#		elif self.index == self.INSTALL_PLUGINS:
-#			self.list.append(getConfigListEntry(_("Do you want to install plugins"), self.enabled))
-		elif self.index == self.INSTALL_SKINS:
-			self.list.append(getConfigListEntry(_("Do you want to change the default skin"), self.enabled))
+		#if self.index == self.STATE_UPDATE:
+		#	if config.misc.installwizard.hasnetwork.value:
+		#		self.list.append(getConfigListEntry(_("Your internet connection is working (ip: %s)") % (self.ipConfigEntry.getText()), self.enabled))
+		#	else:
+		#self.list.append(getConfigListEntry(_("Your receiver does not have an internet connection"), self.enabled))
+		if self.index == self.STATE_CHOISE_CHANNELLIST:
+#			self.list.append(getConfigListEntry(_("Install channel list"), self.enabled))
+#			if self.enabled.value:
+			self.list.append(getConfigListEntry(_("Channel list type"), self.channellist_type))
+# 		elif self.index == self.STATE_CHOISE_SOFTCAM:
+# 			self.list.append(getConfigListEntry(_("Install softcam"), self.enabled))
+# 			if self.enabled.value:
+# 				self.list.append(getConfigListEntry(_("Softcam type"), self.softcam_type))
 		self["config"].list = self.list
 		self["config"].l.setList(self.list)
 
@@ -102,18 +101,18 @@ class InstallWizard(Screen, ConfigListScreen):
 		self.createMenu()
 
 	def run(self):
-		if self.index == self.STATE_UPDATE:
-			if config.misc.installwizard.hasnetwork.value:
-				self.session.open(InstallWizardIpkgUpdater, self.index, _('Please wait (updating packages)'), IpkgComponent.CMD_UPDATE)
-		elif self.index == self.STATE_CHOISE_CHANNELLIST and self.enabled.value:
-			self.session.open(InstallWizardIpkgUpdater, self.index, _('Please wait (downloading channel list)'), IpkgComponent.CMD_REMOVE, {'package': 'enigma2-plugin-settings-henksat-' + self.channellist_type.value})
-#		elif self.index == self.INSTALL_PLUGINS and self.enabled.value:
-#			from PluginBrowser import PluginDownloadBrowser
-#			self.session.open(PluginDownloadBrowser, 0, True, "", "PluginDownloadBrowserWizard")
-		elif self.index == self.INSTALL_SKINS and self.enabled.value:
-			from SkinSelector import SkinSelector
-			self.session.open(SkinSelector, "", "SkinSelectorWizard")
+		#if self.index == self.STATE_UPDATE:
+		#	if config.misc.installwizard.hasnetwork.value:
+		#		self.session.open(InstallWizardIpkgUpdater, self.index, _('Please wait (updating packages)'), IpkgComponent.CMD_UPDATE)
+		if self.index == self.STATE_CHOISE_CHANNELLIST and self.enabled.value and self.channellist_type.value == "default":
+			config.misc.installwizard.channellistdownloaded.value = True
+			os.system("tar -xzf /etc/defaultsat.tar.gz -C /etc/enigma2")
+			eDVBDB.getInstance().reloadServicelist()
+			eDVBDB.getInstance().reloadBouquets()
+# 		elif self.index == self.STATE_CHOISE_SOFTCAM and self.enabled.value:
+# 			self.session.open(InstallWizardIpkgUpdater, self.index, _('Please wait (downloading softcam)'), IpkgComponent.CMD_INSTALL, {'package': 'enigma2-plugin-softcams-' + self.softcam_type.value})
 		return
+
 
 class InstallWizardIpkgUpdater(Screen):
 	def __init__(self, session, index, info, cmd, pkg = None):

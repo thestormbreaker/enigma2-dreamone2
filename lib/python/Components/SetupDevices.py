@@ -1,5 +1,8 @@
+from boxbranding import getMachineBrand
+
 from Components.config import ConfigOnOff, ConfigSelection, ConfigSubsection, ConfigText, config
 from Components.Keyboard import keyboard
+from Components.Language import language
 
 def InitSetupDevices():
 	def keyboardNotifier(configElement):
@@ -8,6 +11,21 @@ def InitSetupDevices():
 	config.keyboard = ConfigSubsection()
 	config.keyboard.keymap = ConfigSelection(default=keyboard.getDefaultKeyboardMap(), choices=keyboard.getKeyboardMaplist())
 	config.keyboard.keymap.addNotifier(keyboardNotifier)
+
+	def languageNotifier(configElement):
+		language.activateLanguage(configElement.value)
+
+	config.osd = ConfigSubsection()
+	if getMachineBrand() == 'Atto.TV':
+		defaultLanguage = "pt_BR"
+	elif getMachineBrand() == 'Zgemma':
+		defaultLanguage = "en_US"
+	elif getMachineBrand() == 'Beyonwiz':
+		defaultLanguage = "en_GB"
+	else:
+		defaultLanguage = "de_DE"
+	config.osd.language = ConfigText(default=defaultLanguage)
+	config.osd.language.addNotifier(languageNotifier)
 
 	config.parental = ConfigSubsection()
 	config.parental.lock = ConfigOnOff(default=False)

@@ -29,6 +29,20 @@ do_package_write_ipk[noexec] = "1"
 do_rm_work[noexec] = "1"
 do_rm_work_all[noexec] = "1"
 
+ACLOCALDIR = "${B}/aclocal-copy"
+e2_copy_aclocal () {
+	rm -rf ${ACLOCALDIR}/
+	mkdir -p ${ACLOCALDIR}/
+	if [ -d ${STAGING_DATADIR_NATIVE}/aclocal ]; then
+		cp-noerror ${STAGING_DATADIR_NATIVE}/aclocal/ ${ACLOCALDIR}/
+	fi
+	if [ -d ${STAGING_DATADIR}/aclocal -a "${STAGING_DATADIR_NATIVE}/aclocal" != "${STAGING_DATADIR}/aclocal" ]; then
+		cp-noerror ${STAGING_DATADIR}/aclocal/ ${ACLOCALDIR}/
+	fi
+}
+
+EXTRACONFFUNCS += "e2_copy_aclocal"
+
 bindir = "/usr/bin"
 sbindir = "/usr/sbin"
 

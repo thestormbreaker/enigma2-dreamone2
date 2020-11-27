@@ -11,7 +11,11 @@ def main(session, **kwargs):
 
 def play(session, **kwargs):
 	from Screens import DVD
-	session.open(DVD.DVDPlayer, dvd_device=harddiskmanager.getAutofsMountpoint(harddiskmanager.getCD()))
+	if (os.path.exists(os.path.join(harddiskmanager.getAutofsMountpoint(harddiskmanager.getCD()), "VIDEO_TS"))
+			or os.path.exists(os.path.join(harddiskmanager.getAutofsMountpoint(harddiskmanager.getCD()), "video_ts"))):
+		session.open(DVD.DVDPlayer, dvd_device=harddiskmanager.getAutofsMountpoint(harddiskmanager.getCD()))
+	else:
+		return
 
 def DVDPlayer(*args, **kwargs):
 	# for backward compatibility with plugins that do "from DVDPlayer.plugin import DVDPlayer"
@@ -92,4 +96,4 @@ def menu(menuid, **kwargs):
 
 def Plugins(**kwargs):
 	return [PluginDescriptor(where = PluginDescriptor.WHERE_FILESCAN, needsRestart = False, fnc = filescan),
-		PluginDescriptor(name = "DVDPlayer", description = "Play DVDs", where = PluginDescriptor.WHERE_MENU, needsRestart = False, fnc = menu)]
+		PluginDescriptor(name = _("DVDPlayer"), description = _("Play DVDs"), where = PluginDescriptor.WHERE_MENU, needsRestart = False, fnc = menu)]

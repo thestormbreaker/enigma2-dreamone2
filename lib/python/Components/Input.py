@@ -1,3 +1,4 @@
+from HTMLComponent import HTMLComponent
 from GUIComponent import GUIComponent
 from VariableText import VariableText
 
@@ -5,7 +6,7 @@ from enigma import eLabel
 
 from Tools.NumericalTextInput import NumericalTextInput
 
-class Input(VariableText, GUIComponent, NumericalTextInput):
+class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 	TEXT = 0
 	PIN = 1
 	NUMBER = 2

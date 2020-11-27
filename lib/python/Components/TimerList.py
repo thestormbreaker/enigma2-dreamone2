@@ -1,12 +1,10 @@
+from HTMLComponent import HTMLComponent
 from GUIComponent import GUIComponent
-from config import config
 from skin import parseFont
 
 from Tools.FuzzyDate import FuzzyTime
 
-from enigma import eListboxPythonMultiContent, eListbox, gFont, loadPNG, RT_HALIGN_LEFT, RT_HALIGN_RIGHT, RT_VALIGN_TOP, RT_VALIGN_BOTTOM, BT_SCALE, BT_KEEP_ASPECT_RATIO, BT_ALIGN_CENTER
-from Components.MultiContent import MultiContentEntryText, MultiContentEntryPixmapAlphaBlend, MultiContentEntryPixmapAlphaTest
-from Components.Renderer.Picon import getPiconName
+from enigma import eListboxPythonMultiContent, eListbox, gFont, RT_HALIGN_LEFT, RT_HALIGN_RIGHT, RT_VALIGN_CENTER, RT_VALIGN_TOP, RT_VALIGN_BOTTOM
 from Tools.Alternatives import GetWithAlternative
 from Tools.LoadPixmap import LoadPixmap
 from Tools.TextBoundary import getTextBoundarySize
@@ -14,47 +12,24 @@ from timer import TimerEntry
 from Tools.Directories import resolveFilename, SCOPE_ACTIVE_SKIN
 
 
-class TimerList(GUIComponent, object):
+class TimerList(HTMLComponent, GUIComponent, object):
 #
-#  | <Name of the Timer>     <Service>  <orb.pos>|
-#  | <state>  <start, end>  |
+#  | <Name of the Timer>    <Service> |
+#  | <state>  <orb.pos>  <start, end> |
 #
 	def buildTimerEntry(self, timer, processed):
 		height = self.l.getItemSize().height()
 		width = self.l.getItemSize().width()
 		res = [ None ]
-		piconWidth = 100 if config.usage.timerlist_showpicons.value else 0
-		serviceName = timer.service_ref.getServiceName()
+
+		serviceName = "  " + timer.service_ref.getServiceName()
 
 		serviceNameWidth = getTextBoundarySize(self.instance, self.serviceNameFont, self.l.getItemSize(), serviceName).width()
-		nameWidth = width - serviceNameWidth - self.iconWidth - self.iconMargin - piconWidth
-		if nameWidth < 200:
-			serviceNameWidth = width - 200 - self.iconWidth - self.iconMargin - piconWidth
+		if 200 > width - serviceNameWidth - self.iconWidth - self.iconMargin:
+			serviceNameWidth = width - 200 - self.iconWidth - self.iconMargin
 
-		def addPicon():
-			refstr = None
-			if hasattr(timer.service_ref, 'sref'):
-				refstr = str(timer.service_ref.sref)
-			else:
-				refstr = str(timer.service_ref)
-
-			displayPicon = None
-			picon = getPiconName(refstr)
-			if picon != "":
-				displayPicon = LoadPixmap(picon)
-			if displayPicon is not None:
-				res.append(MultiContentEntryPixmapAlphaBlend(
-					pos = (colX, 0), size = (piconWidth, self.itemHeight),
-					png = displayPicon,
-					backcolor = None, backcolor_sel = None, flags = BT_SCALE | BT_KEEP_ASPECT_RATIO | BT_ALIGN_CENTER))
-			return piconWidth
-
-		colX = 0
-		if config.usage.timerlist_showpicons.value:
-			colX += addPicon()
-
-		res.append((eListboxPythonMultiContent.TYPE_TEXT, colX + self.iconWidth + self.iconMargin, 0, nameWidth, self.rowSplit, 2, RT_HALIGN_LEFT|RT_VALIGN_BOTTOM, timer.name))
 		res.append((eListboxPythonMultiContent.TYPE_TEXT, width - serviceNameWidth, 0, serviceNameWidth, self.rowSplit, 0, RT_HALIGN_RIGHT|RT_VALIGN_BOTTOM, serviceName))
+		res.append((eListboxPythonMultiContent.TYPE_TEXT, self.iconWidth + self.iconMargin, 0, width - serviceNameWidth - self.iconWidth - self.iconMargin, self.rowSplit, 2, RT_HALIGN_LEFT|RT_VALIGN_BOTTOM, timer.name))
 
 		begin = FuzzyTime(timer.begin)
 		if timer.repeated:
@@ -72,24 +47,27 @@ class TimerList(GUIComponent, object):
 			elif repeatedtext == [_("Sat"), _("Sun")]:
 				repeatedtext = _('Weekend')
 			else:
-				repeatedtext = ", ".join(repeatedtext)
+					repeatedtext = ", ".join(repeatedtext)
 			if self.iconRepeat:
-				res.append((eListboxPythonMultiContent.TYPE_PIXMAP_ALPHABLEND, colX + self.iconMargin, self.rowSplit + (self.itemHeight - self.rowSplit - self.iconHeight) / 2, self.iconWidth, self.iconHeight, self.iconRepeat))
+				res.append((eListboxPythonMultiContent.TYPE_PIXMAP_ALPHABLEND, self.iconMargin / 2, self.rowSplit + (self.itemHeight - self.rowSplit - self.iconHeight) / 2, self.iconWidth, self.iconHeight, self.iconRepeat))
 		else:
 			repeatedtext = begin[0] # date
 		if timer.justplay:
-			extra_text = _("(ZAP)")
-			if timer.pipzap:
-				extra_text = _("(ZAP as PiP)")
-			text = repeatedtext + ((" %s "+ extra_text) % (begin[1]))
+			if timer.end > timer.begin + 3:
+				text = repeatedtext + ((" %s ... %s (" + _("ZAP") + ", %d " + _("mins") + ")") % (begin[1], FuzzyTime(timer.end)[1], (timer.end - timer.begin) / 60))
+			else:
+				text = repeatedtext + ((" %s (" + _("ZAP") + ")") % (begin[1]))
 		else:
 			text = repeatedtext + ((" %s ... %s (%d " + _("mins") + ")") % (begin[1], FuzzyTime(timer.end)[1], (timer.end - timer.begin) / 60))
+
 		icon = None
 		if not processed:
 			if timer.state == TimerEntry.StateWaiting:
 				state = _("waiting")
 				if timer.isAutoTimer:
 					icon = self.iconAutoTimer
+				elif timer.ice_timer_id is not None:
+					icon = self.iconIceTVTimer
 				else:
 					icon = self.iconWait
 			elif timer.state == TimerEntry.StatePrepared:
@@ -118,13 +96,13 @@ class TimerList(GUIComponent, object):
 			state = _("done!")
 			icon = self.iconDone
 
-		icon and res.append((eListboxPythonMultiContent.TYPE_PIXMAP_ALPHABLEND, colX + self.iconMargin / 2, (self.rowSplit - self.iconHeight) / 2, self.iconWidth, self.iconHeight, icon))
+		icon and res.append((eListboxPythonMultiContent.TYPE_PIXMAP_ALPHABLEND, self.iconMargin / 2, (self.rowSplit - self.iconHeight) / 2, self.iconWidth, self.iconHeight, icon))
 
 		orbpos = self.getOrbitalPos(timer.service_ref)
 		orbposWidth = getTextBoundarySize(self.instance, self.font, self.l.getItemSize(), orbpos).width()
-		res.append((eListboxPythonMultiContent.TYPE_TEXT, colX + self.satPosLeft, self.rowSplit, orbposWidth, self.itemHeight - self.rowSplit, 1, RT_HALIGN_LEFT|RT_VALIGN_TOP, orbpos))
-		res.append((eListboxPythonMultiContent.TYPE_TEXT, colX + self.iconWidth + self.iconMargin, self.rowSplit, self.satPosLeft - self.iconWidth - self.iconMargin, self.itemHeight - self.rowSplit, 1, RT_HALIGN_LEFT|RT_VALIGN_TOP, state))
-		res.append((eListboxPythonMultiContent.TYPE_TEXT, colX + self.satPosLeft + orbposWidth, self.rowSplit, width - self.satPosLeft - orbposWidth - colX, self.itemHeight - self.rowSplit, 1, RT_HALIGN_RIGHT|RT_VALIGN_TOP, text))
+		res.append((eListboxPythonMultiContent.TYPE_TEXT, self.satPosLeft, self.rowSplit, orbposWidth, self.itemHeight - self.rowSplit, 1, RT_HALIGN_LEFT|RT_VALIGN_TOP, orbpos))
+		res.append((eListboxPythonMultiContent.TYPE_TEXT, self.iconWidth + self.iconMargin, self.rowSplit, self.satPosLeft - self.iconWidth - self.iconMargin, self.itemHeight - self.rowSplit, 1, RT_HALIGN_LEFT|RT_VALIGN_TOP, state))
+		res.append((eListboxPythonMultiContent.TYPE_TEXT, self.satPosLeft + orbposWidth, self.rowSplit, width - self.satPosLeft - orbposWidth, self.itemHeight - self.rowSplit, 1, RT_HALIGN_RIGHT|RT_VALIGN_TOP, text))
 
 		line = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, "div-h.png"))
 		res.append((eListboxPythonMultiContent.TYPE_PIXMAP_ALPHABLEND, 0, height-2, width, 2, line))
@@ -138,7 +116,6 @@ class TimerList(GUIComponent, object):
 		self.serviceNameFont = gFont("Regular", 20)
 		self.font = gFont("Regular", 18)
 		self.eventNameFont = gFont("Regular", 18)
-
 		self.l.setList(list)
 		self.itemHeight = 50
 		self.rowSplit = 25
@@ -156,6 +133,7 @@ class TimerList(GUIComponent, object):
 		self.iconDisabled = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, "icons/timer_off.png"))
 		self.iconFailed = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, "icons/timer_failed.png"))
 		self.iconAutoTimer = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, "icons/timer_autotimer.png"))
+		self.iconIceTVTimer = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, "icons/timer_icetv.png"))
 
 	def applySkin(self, desktop, parent):
 		def itemHeight(value):

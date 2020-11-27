@@ -52,7 +52,12 @@ class Keyboard:
 		# locale = language.getLocale()
 		# if locale.startswith("de_") and "de.kmap" in self.keyboardMaps:
 		# 	return "de.kmap"
-		return "default.kmap"
+		from boxbranding import getMachineBrand
+		if getMachineBrand() in ("Zgemma", "Atto.TV"):
+			return "us.kmap"
+		elif getMachineBrand() == "Beyonwiz":
+			return "eng.kmap"
+		return "de.kmap"
 
 
 keyboard = Keyboard()

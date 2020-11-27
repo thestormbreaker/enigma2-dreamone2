@@ -109,18 +109,22 @@ to generate HTML."""
 		self.disable_callbacks = False
 
 	def pageUp(self):
-		try:
-			instance = self.master.master.instance
-			instance.moveSelection(instance.pageUp)
-		except AttributeError:
-			return
+		if self.getIndex() == 0:
+			self.index = self.count() - 1
+		elif self.getIndex() - 10 < 0:
+			self.index = 0
+		else:
+			self.index -= 10
+		self.setIndex(self.index)
 
 	def pageDown(self):
-		try:
-			instance = self.master.master.instance
-			instance.moveSelection(instance.pageDown)
-		except AttributeError:
-			return
+		if self.getIndex() == self.count() - 1:
+			self.index = 0
+		elif self.getIndex() + 10 >= self.count():
+			self.index = self.count() - 1
+		else:
+			self.index += 10
+		self.setIndex(self.index)
 
 	def up(self):
 		self.selectPrevious()

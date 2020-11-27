@@ -3,6 +3,7 @@ from Tools.Directories import resolveFilename, SCOPE_SKIN
 from xml.etree.ElementTree import ElementTree
 from Components.config import config, ConfigInteger
 from Components.RcModel import rc_model
+from boxbranding import getBoxType
 
 config.misc.rcused = ConfigInteger(default = 1)
 
@@ -28,10 +29,13 @@ class Rc:
 		self.onShown.append(self.initRc)
 
 	def initRc(self):
-		if self.isDefaultRc:
+		if getBoxType() in ('uniboxhd1', 'uniboxhd2', 'uniboxhd3', 'sezam5000hd', 'mbtwin', 'beyonwizt3'):
 			self["rc"].setPixmapNum(config.misc.rcused.value)
 		else:
-			self["rc"].setPixmapNum(0)
+			if self.isDefaultRc:
+				self["rc"].setPixmapNum(config.misc.rcused.value)
+			else:
+				self["rc"].setPixmapNum(0)
 
 	def readPositions(self):
 		if self.isDefaultRc:
@@ -70,7 +74,8 @@ class Rc:
 				rc = self.rcs[2]
 			except:
 				rc = self.rcs[config.misc.rcused.value]
-		if key in rc:
+
+		if rc.has_key(key):
 			rcpos = self["rc"].getPosition()
 			pos = rc[key]
 			selectPics = self.getSelectPic(pos)
@@ -80,7 +85,7 @@ class Rc:
 					selectPic = x
 					break
 			if selectPic is not None:
-				print "[RC] selectPic:", selectPic
+				print "selectPic:", selectPic
 				self[selectPic].moveTo(rcpos[0] + pos[0] + selectPics[1][0], rcpos[1] + pos[1] + selectPics[1][1], 1)
 				self[selectPic].startMoving()
 				self[selectPic].show()

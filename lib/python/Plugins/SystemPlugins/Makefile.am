@@ -1,46 +1,29 @@
 installdir = $(pkglibdir)/python/Plugins/SystemPlugins
 
-SUBDIRS = PositionerSetup Satfinder \
-	VideoTune Hotplug \
+SUBDIRS = PositionerSetup Satfinder SoftwareManager \
+	VideoTune Hotplug CableScan \
 	DefaultServicesScanner CommonInterfaceAssignment \
-	HdmiCEC VideoClippingSetup \
-	VideoEnhancement WirelessLan NetworkWizard \
-	SABnzbdSetup FastScan SatelliteEquipmentControl DiseqcTester
-
-if VUSOLO2
-SUBDIRS += CableScan
-endif
-
-if VUSOLOSE
-SUBDIRS += CableScan
-endif
-
-if VUDUO2
-SUBDIRS += CableScan
-endif
-
-if VUUNO
-SUBDIRS += CableScan
-endif
-
-if VUULTIMO
-SUBDIRS += CableScan
-endif
-
-if VUSOLO4K
-SUBDIRS += CableScan
-endif
-
-if VUUNO4K
-SUBDIRS += CableScan
-endif
-
-if VUULTIMO4K
-SUBDIRS += CableScan
-endif
+	VideoEnhancement WirelessLan NetworkWizard VideoClippingSetup \
+	SatelliteEquipmentControl DiseqcTester HdmiCEC FastScan LCNScanner IceTV
 
 if HAVE_LIBVUGLES2
 SUBDIRS += AnimationSetup
+endif
+
+if HAVE_OSDANIMATION
+SUBDIRS += AnimationSetup
+endif
+
+if DREAMBOX
+SUBDIRS += FrontprocessorUpgrade NFIFlash
+endif
+
+if DM900
+SUBDIRS += FSBLUpdater
+endif
+
+if DM920
+SUBDIRS += FSBLUpdater
 endif
 
 install_PYTHON = __init__.py

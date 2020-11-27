@@ -1,3 +1,4 @@
+from HTMLComponent import HTMLComponent
 from GUIComponent import GUIComponent
 from VariableText import VariableText
 
@@ -6,7 +7,7 @@ from enigma import eTimer, eLabel
 import time
 # now some "real" components:
 
-class Clock(VariableText, GUIComponent):
+class Clock(VariableText, HTMLComponent, GUIComponent):
 	def __init__(self):
 		VariableText.__init__(self)
 		GUIComponent.__init__(self)
@@ -32,3 +33,6 @@ class Clock(VariableText, GUIComponent):
 
 	def removeWidget(self, w):
 		del self.clockTimer
+
+	def produceHTML(self):
+		return self.getText()

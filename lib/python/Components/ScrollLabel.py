@@ -1,8 +1,9 @@
 import skin
+from HTMLComponent import HTMLComponent
 from GUIComponent import GUIComponent
 from enigma import eLabel, eWidget, eSlider, fontRenderClass, ePoint, eSize
 
-class ScrollLabel(GUIComponent):
+class ScrollLabel(HTMLComponent, GUIComponent):
 	def __init__(self, text="", showscrollbar=True):
 		GUIComponent.__init__(self)
 		self.message = text
@@ -17,36 +18,58 @@ class ScrollLabel(GUIComponent):
 		self.column = 0
 		self.split = False
 		self.splitchar = "|"
+		self.lineheight = None
+		self.scrollbarmode = "showOnDemand"
 
 	def applySkin(self, desktop, parent):
 		scrollbarWidth = 10
+		itemHeight = 30
 		scrollbarBorderWidth = 1
 		ret = False
 		if self.skinAttributes:
 			widget_attribs = []
 			scrollbar_attribs = []
-			scrollbarAttrib = ["borderColor", "borderWidth", "scrollbarSliderForegroundColor", "scrollbarSliderBorderColor", "scrollbarSliderPicture", "scrollbarBackgroundPicture"]
+			remove_attribs = [ ]
 			for (attrib, value) in self.skinAttributes:
-				if attrib in scrollbarAttrib:
-					scrollbar_attribs.append((attrib, value))
-					self.skinAttributes.remove((attrib, value))
-				elif "transparent" in attrib or "backgroundColor" in attrib:
-					widget_attribs.append((attrib, value))
-				elif "scrollbarWidth" in attrib:
+				if "itemHeight" in attrib:
+					itemHeight = int(value)
+					remove_attribs.append((attrib, value))
+				if "scrollbarMode" in attrib:
+					self.scrollbarmode = value
+					remove_attribs.append((attrib, value))
+				if "borderColor" in attrib or "borderWidth" in attrib:
+					scrollbar_attribs.append((attrib,value))
+				if "transparent" in attrib or "backgroundColor" in attrib:
+					widget_attribs.append((attrib,value))
+				if "scrollbarSliderForegroundColor" in attrib:
+					scrollbar_attribs.append((attrib,value))
+					remove_attribs.append((attrib, value))
+				if "scrollbarSliderBorderColor" in attrib:
+					scrollbar_attribs.append((attrib,value))
+					remove_attribs.append((attrib, value))
+				if "scrollbarSliderPicture" in attrib:
+					scrollbar_attribs.append((attrib,value))
+					remove_attribs.append((attrib, value))
+				if "scrollbarBackgroundPicture" in attrib:
+					scrollbar_attribs.append((attrib,value))
+					remove_attribs.append((attrib, value))
+				if "scrollbarWidth" in attrib:
 					scrollbarWidth = int(value)
-					self.skinAttributes.remove((attrib, value))
-				elif "scrollbarSliderBorderWidth" in attrib:
+					remove_attribs.append((attrib, value))
+				if "scrollbarSliderBorderWidth" in attrib:
 					scrollbarBorderWidth = int(value)
-					self.skinAttributes.remove((attrib, value))
-				elif "split" in attrib:
+					remove_attribs.append((attrib, value))
+				if "split" in attrib:
 					self.split = int(value)
 					if self.split:
 						self.right_text = eLabel(self.instance)
 					self.skinAttributes.remove((attrib, value))	
-				elif "colposition" in attrib:
+				if "colposition" in attrib:
 					self.column = int(value)
-				elif "dividechar" in attrib:
+				if "dividechar" in attrib:
 					self.splitchar = value
+			for (attrib, value) in remove_attribs:
+				self.skinAttributes.remove((attrib, value))
 			if self.split:
 				skin.applyAllAttributes(self.long_text, desktop, self.skinAttributes + [("halign", "left")], parent.scale)
 				skin.applyAllAttributes(self.right_text, desktop, self.skinAttributes + [("transparent", "1"), ("halign", "left" if self.column else "right")], parent.scale)
@@ -56,13 +79,13 @@ class ScrollLabel(GUIComponent):
 			skin.applyAllAttributes(self.scrollbar, desktop, scrollbar_attribs + widget_attribs, parent.scale)
 			ret = True
 		self.pageWidth = self.long_text.size().width()
-		lineheight = fontRenderClass.getInstance().getLineHeight(self.long_text.getFont()) or 30 # assume a random lineheight if nothing is visible
-		lines = int(self.long_text.size().height() / lineheight)
-		self.pageHeight = int(lines * lineheight)
+		self.lineheight = fontRenderClass.getInstance().getLineHeight(self.long_text.getFont()) or itemHeight # assume a random lineheight if nothing is visible
+		lines = int(self.long_text.size().height() / self.lineheight)
+		self.pageHeight = int(lines * self.lineheight)
 		self.instance.move(self.long_text.position())
-		self.instance.resize(eSize(self.pageWidth, self.pageHeight + int(lineheight/6)))
-		self.scrollbar.move(ePoint(self.pageWidth - scrollbarWidth, 0))
-		self.scrollbar.resize(eSize(scrollbarWidth, self.pageHeight + int(lineheight / 6)))
+		self.instance.resize(eSize(self.pageWidth, self.pageHeight + int(self.lineheight/6)))
+		self.scrollbar.move(ePoint(self.pageWidth-scrollbarWidth,0))
+		self.scrollbar.resize(eSize(scrollbarWidth,self.pageHeight+ int(self.lineheight/6)))
 		self.scrollbar.setOrientation(eSlider.orVertical)
 		self.scrollbar.setRange(0, 100)
 		self.scrollbar.setBorderWidth(scrollbarBorderWidth)
@@ -96,7 +119,7 @@ class ScrollLabel(GUIComponent):
 				self.lastPage()
 			else:
 				self.setPos(0)
-			if self.showscrollbar and self.TotalTextHeight > self.pageHeight:
+			if (self. scrollbarmode == "showAlways") or ((self.scrollbarmode == "showOnDemand") and self.showscrollbar and self.TotalTextHeight > self.pageHeight):
 				self.scrollbar.show()
 				self.updateScrollbar()
 			else:
@@ -136,6 +159,9 @@ class ScrollLabel(GUIComponent):
 		self.scrollbar = None
 		self.instance = None
 		self.right_text = None
+
+	def produceHTML(self):
+		return self.message
 
 	def getText(self):
 		return self.message

@@ -637,12 +637,7 @@ class Partition:
 		return ''
 
 DEVICEDB = \
-       {"dreamone":
-               {
-                       "/devices/platform/ff500000.dwc3/xhci-hcd.0.auto/usb1": _("USB 2.0 (Back, inner)"),
-                       "/devices/platform/ff500000.dwc3/xhci-hcd.0.auto/usb2": _("USB 3.0 (Back, outer)"),
-               },
-       "dm8000":
+	{"dm8000":
 		{
 			"/devices/pci0000:01/0000:01:00.0/host1/target1:0:0/1:0:0:0": _("SATA"),
 			"/devices/platform/brcm-ehci.0/usb1/1-1/1-1.1/1-1.1:1.0": _("Front USB"),
@@ -734,6 +729,11 @@ DEVICEDB = \
 		"/devices/rdb.4/f0470400.ohci_v2/usb5/5-0:1.0/port1/": _("Back USB"),
 		"/devices/rdb.4/f0470500.ehci_v2/usb4/4-0:1.0/port1/": _("Back USB"),
 		"/devices/rdb.4/f0471000.xhci_v2/usb2/2-0:1.0/port2/": _("Back USB"),
+	},
+	"one":
+	{
+		"/devices/platform/ff500000.dwc3/xhci-hcd.0.auto/usb1": _("USB 2.0 (Back, inner)"),
+		"/devices/platform/ff500000.dwc3/xhci-hcd.0.auto/usb2": _("USB 3.0 (Back, outer)"),
 	},
 	"dm800se":
 	{
@@ -1148,29 +1148,4 @@ class MkfsTask(Task.LoggingTask):
 		self._reloadSystemdForData()
 
 harddiskmanager = HarddiskManager()
-
-
-SystemInfo["ext4"] = isFileSystemSupported("ext4")
-def isSleepStateDevice(device):	
-    ret = os.popen('hdparm -C %s' % device).read()	
-    if 'SG_IO' in ret or 'HDIO_DRIVE_CMD' in ret:	
-        return None	
-    elif 'drive state is:  standby' in ret or 'drive state is:  idle' in ret:	
-        return True	
-    elif 'drive state is:  active/idle' in ret:	
-        return False	
-    else:	
-        return None	
-
-
-def internalHDDNotSleeping(external = False):	
-    state = False	
-    if harddiskmanager.HDDCount():	
-        for hdd in harddiskmanager.HDDList():	
-            if hdd[1].internal or external:	
-                if hdd[1].idle_running and hdd[1].max_idle_time and not hdd[1].isSleeping():	
-                    state = True	
-
-    return state
-
 SystemInfo["ext4"] = isFileSystemSupported("ext4")

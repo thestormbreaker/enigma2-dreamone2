@@ -12,16 +12,6 @@ class eDVBAudio: public iObject
 private:
 	ePtr<eDVBDemux> m_demux;
 	int m_fd, m_fd_demux, m_dev, m_is_freezed;
-	void  *lib_handle;
-	int  (*__AudioCodec_init)(int , int);
-	int  (*__AudioCodec_startPid)(int , int, int);
-	void (*__AudioCodec_stop)(void);	
-	void (*__AudioCodec_flush)(void);	
-	void (*__AudioCodec_freeze)(void);	
-	void (*__AudioCodec_unfreeze)(void);	
-	void (*__AudioCodec_setChannel)(int);
-	int  (*__AudioCodec_getPTS)(__u64 *);
-	void (*__AudioCodec_destroy)(void);
 public:
 	enum { aMPEG, aAC3, aDTS, aAAC, aAACHE, aLPCM, aDTSHD, aDDP, aDRA, aAC4, aPCM };
 	eDVBAudio(eDVBDemux *demux, int dev);

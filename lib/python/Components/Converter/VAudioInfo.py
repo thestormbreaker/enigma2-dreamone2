@@ -64,7 +64,7 @@ class VAudioInfo(Poll, Converter, object):
 				return languages
 			if description.lower() in languages.lower():
 				languages = ""
-			description_str = description
+			description_str = description + " " + languages
 		return description_str
 
 	def getAudioIcon(self,info):
