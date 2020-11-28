@@ -1,4 +1,4 @@
-from boxbranding import getMachineBrand, getMachineName, getBoxType
+from boxbranding import getMachineBrand, getMachineName
 from os import system
 
 from enigma import eTimer
@@ -6,11 +6,12 @@ from enigma import eTimer
 from Screens.WizardLanguage import WizardLanguage
 from Screens.Rc import Rc
 from Screens.MessageBox import MessageBox
-from Screens.Screen import Screen
 from Components.Pixmap import Pixmap
 from Components.Sources.Boolean import Boolean
 from Components.Network import iNetwork
+from Components.Label import Label
 from Tools.Directories import resolveFilename, SCOPE_PLUGINS
+
 
 class NetworkWizard(WizardLanguage, Rc):
 	skin = """
@@ -37,13 +38,12 @@ class NetworkWizard(WizardLanguage, Rc):
 		self.xmlfile = resolveFilename(SCOPE_PLUGINS, "SystemPlugins/NetworkWizard/networkwizard.xml")
 		WizardLanguage.__init__(self, session, showSteps = False, showStepSlider = False)
 		Rc.__init__(self)
-		Screen.setTitle(self, _("NetworkWizard"))
 		self.session = session
 		self["wizard"] = Pixmap()
 		self["HelpWindow"] = Pixmap()
 		self["HelpWindow"].hide()
 		self["VKeyIcon"] = Boolean(False)
-
+		self["key_red"] = Label()
 		self.InstalledInterfaceCount = None
 		self.Adapterlist = None
 		self.InterfaceState = None
@@ -80,7 +80,6 @@ class NetworkWizard(WizardLanguage, Rc):
 		self.stopScan()
 		del self.rescanTimer
 		self.checkOldInterfaceState()
-		self.exit()
 		pass
 
 	def back(self):
@@ -150,8 +149,8 @@ class NetworkWizard(WizardLanguage, Rc):
 			self.NextStep = 'end'
 		elif index == 'eth0':
 			self.NextStep = 'nwconfig'
-		elif index == 'eth1' and getBoxType() == "et10000":
-			self.NextStep = 'nwconfig'
+		elif index == 'eth1':
+			self.NextStep = 'nwconfig'			
 		else:
 			self.NextStep = 'asknetworktype'
 
@@ -234,6 +233,19 @@ class NetworkWizard(WizardLanguage, Rc):
 			self.InterfaceState = False
 		self.AdapterRef.close(True)
 
+
+	def bH_close(self):
+		from Screens.BpSet import BhSpeedUp
+		self.session.openWithCallback(self.bH_close_end, BhSpeedUp, True)
+
+	def bH_close_end(self):
+		from Components.PluginComponent import plugins
+		from Tools.Directories import SCOPE_PLUGINS
+		plugins.firstRun = True
+		plugins.clearPluginList()
+		plugins.readPluginList(resolveFilename(SCOPE_PLUGINS))
+		self.close()
+
 	def checkWlanStateCB(self,data,status):
 		if data is not None:
 			if data is True:
@@ -297,7 +309,7 @@ class NetworkWizard(WizardLanguage, Rc):
 			self.newAPlist.append(newentry)
 
 		if len(self.newAPlist):
-			if self.wizard[self.currStep].has_key("dynamiclist"):
+			if "dynamiclist" in self.wizard[self.currStep]:
 				currentListEntry = self["list"].getCurrent()
 				if currentListEntry is not None:
 					idx = 0

@@ -3,10 +3,12 @@ from time import localtime, mktime, time, strftime
 from enigma import eEPGCache, eTimer, eServiceReference, ePoint
 
 from Screens.Screen import Screen
+from Screens.TimerEdit import TimerSanityConflict
 from Screens.ChoiceBox import ChoiceBox
 from Components.ActionMap import ActionMap
 from Components.Button import Button
 from Components.Label import Label
+from Components.config import config
 from Components.Sources.StaticText import StaticText
 from Components.ScrollLabel import ScrollLabel
 from Components.PluginComponent import plugins
@@ -15,31 +17,22 @@ from Components.UsageConfig import preferredTimerPath
 from Components.Pixmap import Pixmap
 from Components.Sources.ServiceEvent import ServiceEvent
 from Components.Sources.Event import Event
-from Components.config import config
 from RecordTimer import RecordTimerEntry, parseEvent, AFTEREVENT
 from Screens.TimerEntry import TimerEntry
 from Plugins.Plugin import PluginDescriptor
 from Tools.BoundFunction import boundFunction
 
+
 class EventViewContextMenu(Screen):
 	def __init__(self, session, menu):
 		Screen.__init__(self, session)
-		self.setTitle(_('Eventview menu'))
+		self.setTitle(_('Event view menu'))
 
 		self["actions"] = ActionMap(["OkCancelActions"],
 			{
 				"ok": self.okbuttonClick,
 				"cancel": self.cancelClick
 			})
-
-		try:
-			if config.skin.primary_skin.value.startswith('MetrixHD/'):
-				count = 0
-				for entry in menu:
-					menu[count] = ("        " + entry[0], entry[1])
-					count += 1
-		except:
-			pass
 
 		self["menu"] = MenuList(menu)
 
@@ -57,10 +50,11 @@ class EventViewBase:
 		self.similarEPGCB = similarEPGCB
 		self.cbFunc = callback
 		self.currentService = ref
-		self.isRecording = (not ref.ref.flags & eServiceReference.isGroup) and ref.ref.getPath()
+		self.isRecording = (not ref.ref.flags & eServiceReference.isGroup) and ref.ref.getPath() and ref.ref.getPath()[0] == '/'
 		self.event = event
 		self["Service"] = ServiceEvent()
 		self["Event"] = Event()
+		self["epg_eventname"] = ScrollLabel()
 		self["epg_description"] = ScrollLabel()
 		self["FullDescription"] = ScrollLabel()
 		self["summary_description"] = StaticText()
@@ -77,7 +71,6 @@ class EventViewBase:
 			{
 				"cancel": self.close,
 				"ok": self.close,
-				"info": self.close,
 				"pageUp": self.pageUp,
 				"pageDown": self.pageDown,
 				"prevEvent": self.prevEvent,
@@ -104,11 +97,7 @@ class EventViewBase:
 		if self.cbFunc is not None:
 			self.cbFunc(self.setEvent, self.setService, +1)
 
-	def editTimer(self, timer):
-		self.session.open(TimerEntry, timer)
-
 	def removeTimer(self, timer):
-		self.closeChoiceBoxDialog()
 		timer.afterEvent = AFTEREVENT.NONE
 		self.session.nav.RecordTimer.removeEntry(timer)
 		self["key_green"].setText(_("Add timer"))
@@ -125,9 +114,6 @@ class EventViewBase:
 		refstr = ':'.join(serviceref.ref.toString().split(':')[:11])
 		for timer in self.session.nav.RecordTimer.timer_list:
 			if timer.eit == eventid and ':'.join(timer.service_ref.ref.toString().split(':')[:11]) == refstr:
-				# disable dialog box -> workaround for non closed dialog when press key green for delete Timer (bsod when again green, blue or ok key was pressed)
-				self.editTimer(timer)
-				break
 				cb_func1 = lambda ret: self.removeTimer(timer)
 				cb_func2 = lambda ret: self.editTimer(timer)
 				menu = [(_("Delete timer"), 'CALLFUNC', self.ChoiceBoxCB, cb_func1), (_("Edit timer"), 'CALLFUNC', self.ChoiceBoxCB, cb_func2)]
@@ -158,7 +144,7 @@ class EventViewBase:
 		self['actions'].setEnabled(True)
 
 	def finishedAdd(self, answer):
-		print "finished add"
+		print "[EventView] finished add"
 		if answer[0]:
 			entry = answer[1]
 			simulTimerList = self.session.nav.RecordTimer.record(entry)
@@ -181,17 +167,13 @@ class EventViewBase:
 						if change_time:
 							simulTimerList = self.session.nav.RecordTimer.record(entry)
 					if simulTimerList is not None:
-						try:
-							from Screens.TimerEdit import TimerSanityConflict
-						except: # maybe already been imported from another module
-							pass
 						self.session.openWithCallback(self.finishSanityCorrection, TimerSanityConflict, simulTimerList)
 			self["key_green"].setText(_("Change timer"))
 			self.key_green_choice = self.REMOVE_TIMER
 		else:
 			self["key_green"].setText(_("Add timer"))
 			self.key_green_choice = self.ADD_TIMER
-			print "Timeredit aborted"
+			print "[EventView] Timeredit aborted"
 
 	def finishSanityCorrection(self, answer):
 		self.finishedAdd(answer)
@@ -224,6 +206,7 @@ class EventViewBase:
 		self.event = event
 		text = event.getEventName()
 		self.setTitle(text)
+		self["epg_eventname"].setText(text)
 
 		short = event.getShortDescription()
 		extended = event.getExtendedDescription()
@@ -231,9 +214,7 @@ class EventViewBase:
 		if short == text:
 			short = ""
 
-		if short and extended and extended.replace('\n','') == short.replace('\n',''):
-			pass #extended = extended
-		elif short and extended:
+		if short and extended:
 			extended = short + '\n' + extended
 		elif short:
 			extended = short
@@ -246,44 +227,14 @@ class EventViewBase:
 
 		self["summary_description"].setText(extended)
 
-		beginTimeString = event.getBeginTimeString()
-
-		if not beginTimeString:
-			return
-		begintime = begindate = []
-		for x in beginTimeString.split(' '):
-			x = x.rstrip(',').rstrip('.')
-			if ':' in x:
-				begintime = x.split(':')
-			elif '.' in x:
-				begindate = x.split('.')
-			elif '/' in x:
-				begindate = x.split('/')
-				begindate.reverse()
-		###check
-		fail = False
-		try:
-			if len(begintime) < 2 and len(begindate) < 2 or int(begintime[0]) > 23 or int(begintime[1]) > 59 or int(begindate[0]) > 31 or int(begindate[1]) > 12:
-				fail = True
-		except:
-			fail = True
-
-		if fail:
-			print 'wrong timestamp detected: source = %s ,date = %s ,time = %s' %(beginTimeString,begindate,begintime)
-			return
-		###
-
-		nowt = time()
-		now = localtime(nowt)
-
-		begin = localtime(int(mktime((now.tm_year, int(begindate[1]), int(begindate[0]), int(begintime[0]), int(begintime[1]), 0, now.tm_wday, now.tm_yday, now.tm_isdst))))
-		end = localtime(int(mktime((now.tm_year, int(begindate[1]), int(begindate[0]), int(begintime[0]), int(begintime[1]), 0, now.tm_wday, now.tm_yday, now.tm_isdst))) + event.getDuration())
-
-		self["datetime"].setText("%s - %s" % (strftime("%s, %s" % (config.usage.date.short.value, config.usage.time.short.value), begin), strftime(config.usage.time.short.value, end)))
+		begint = event.getBeginTime()
+		begintime = localtime(begint)
+		endtime = localtime(begint + event.getDuration())
+		self["datetime"].setText("%s - %s" % (strftime("%s, %s" % (config.usage.date.short.value, config.usage.time.short.value), begintime), strftime(config.usage.time.short.value, endtime)))
 		self["duration"].setText(_("%d min")%(event.getDuration()/60))
 		if self.SimilarBroadcastTimer is not None:
 			self.SimilarBroadcastTimer.start(400, True)
-			
+
 		serviceref = self.currentService
 		eventid = self.event.getEventId()
 		refstr = ':'.join(serviceref.ref.toString().split(':')[:11])
@@ -301,10 +252,12 @@ class EventViewBase:
 
 
 	def pageUp(self):
+		self["epg_eventname"].pageUp()
 		self["epg_description"].pageUp()
 		self["FullDescription"].pageUp()
 
 	def pageDown(self):
+		self["epg_eventname"].pageDown()
 		self["epg_description"].pageDown()
 		self["FullDescription"].pageDown()
 
@@ -320,8 +273,7 @@ class EventViewBase:
 			text = '\n\n' + _('Similar broadcasts:')
 			ret.sort(self.sort_func)
 			for x in ret:
-				t = localtime(x[1])
-				text += "\n%s - %s" % (strftime(config.usage.date.long.value + ", " + config.usage.time.short.value, t), x[0])
+				text += "\n%s  -  %s" % (strftime(config.usage.date.long.value + ", " + config.usage.time.short.value, localtime(x[1])), x[0])
 			descr = self["epg_description"]
 			descr.setText(descr.getText()+text)
 			descr = self["FullDescription"]
@@ -351,7 +303,7 @@ class EventViewBase:
 class EventViewSimple(Screen, EventViewBase):
 	def __init__(self, session, event, ref, callback=None, singleEPGCB=None, multiEPGCB=None, similarEPGCB=None, skin='EventViewSimple'):
 		Screen.__init__(self, session)
-		self.setTitle(_('Eventview'))
+		self.setTitle(_('Event view'))
 		self.skinName = [skin,"EventView"]
 		EventViewBase.__init__(self, event, ref, callback, similarEPGCB)
 		self.key_green_choice = None
@@ -390,7 +342,7 @@ class EventViewEPGSelect(Screen, EventViewBase):
 		else:
 			self["key_yellow"] = Button("")
 			self["yellow"].hide()
-			
+
 		if multiEPGCB:
 			self["key_blue"] = Button(_("Multi EPG"))
 			self["epgactions3"] = ActionMap(["EventViewEPGActions"],
@@ -401,45 +353,3 @@ class EventViewEPGSelect(Screen, EventViewBase):
 		else:
 			self["key_blue"] = Button("")
 			self["blue"].hide()
-
-class EventViewMovieEvent(Screen):
-	def __init__(self, session, name = None, ext_desc = None, dur = None):
-		Screen.__init__(self, session)
-		self.screentitle = _("Eventview")
-		self.skinName = "EventView"
-		self.duration = ""
-		if dur:
-			self.duration = dur
-		self.ext_desc = ""
-		if name:
-			self.ext_desc = name + "\n\n"
-		if ext_desc:
-			self.ext_desc += ext_desc
-		self["epg_description"] = ScrollLabel()
-		self["datetime"] = Label()
-		self["channel"] = Label()
-		self["duration"] = Label()
-		
-		self["key_red"] = Button("")
-		self["key_green"] = Button("")
-		self["key_yellow"] = Button("")
-		self["key_blue"] = Button("")
-		self["actions"] = ActionMap(["OkCancelActions", "EventViewActions"],
-			{
-				"cancel": self.close,
-				"ok": self.close,
-				"pageUp": self.pageUp,
-				"pageDown": self.pageDown,
-			})
-		self.onShown.append(self.onCreate)
-
-	def onCreate(self):
-		self.setTitle(self.screentitle)
-		self["epg_description"].setText(self.ext_desc)
-		self["duration"].setText(self.duration)
-
-	def pageUp(self):
-		self["epg_description"].pageUp()
-
-	def pageDown(self):
-		self["epg_description"].pageDown()

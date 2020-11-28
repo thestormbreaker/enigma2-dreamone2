@@ -74,7 +74,7 @@ class AusClassifications(dict):
 # If there is no matching country then the default ETSI should be selected.
 
 countries = {
-	"INT": (ETSIClassifications(), lambda age: (_("bc%d") % age, _("Rating defined by broadcaster - %d") % age, "ratings/ETSI-na.png")),
+	"ETSI": (ETSIClassifications(), lambda age: (_("bc%d") % age, _("Rating defined by broadcaster - %d") % age, "ratings/ETSI-na.png")),
 	"AUS": (AusClassifications(), lambda age: (_("BC%d") % age, _("Rating defined by broadcaster - %d") % age, "ratings/AUS-na.png"))
 }
 
@@ -95,9 +95,6 @@ class EventName(Converter, object):
 	PDCTIME = 12
 	PDCTIMESHORT = 13
 	ISRUNNINGSTATUS = 14
-	GENRELIST = 15
-	EVENT_EXTRADATA = 16
-	EPG_SOURCE = 17
 
 	NEXT_DESCRIPTION = 21
 	THIRD_NAME = 22
@@ -122,7 +119,6 @@ class EventName(Converter, object):
 		"NextNameOnly": ("type", NAME_NEXT2),
 		"NameNextOnly": ("type", NAME_NEXT2),
 		"Genre": ("type", GENRE),
-		"GenreList": ("type", GENRELIST),
 		"Rating": ("type", RATING),
 		"SmallRating": ("type", SRATING),
 		"Pdc": ("type", PDC),
@@ -139,8 +135,6 @@ class EventName(Converter, object):
 		# Options...
 		"Separated": ("separator", "\n\n"),
 		"NotSeparated": ("separator", "\n"),
-		"SeparatorSlash": ("separator", "/"),
-		"SeparatorComma": ("separator", ", "),
 		"Trimmed": ("trim", True),
 		"NotTrimmed": ("trim", False)
 	}
@@ -157,7 +151,7 @@ class EventName(Converter, object):
 		self.epgcache = eEPGCache.getInstance()
 
 		self.type = self.NAME
-		self.separator = None
+		self.separator = "\n"
 		self.trim = False
 
 		parse = ","
@@ -169,9 +163,6 @@ class EventName(Converter, object):
 				print "[EventName] ERROR: Unexpected / Invalid argument token '%s'!" % arg
 			else:
 				setattr(self, name, value)
-		if self.separator is None:
-			default_sep = "SeparatorComma" if self.type == self.GENRELIST else "NotSeparated"
-			self.separator = self.KEYWORDS[default_sep][1]
 
 	def trimText(self, text):
 		if self.trim:
@@ -214,7 +205,7 @@ class EventName(Converter, object):
 				if country in countries:
 					c = countries[country]
 				else:
-					c = countries["INT"]
+					c = countries["ETSI"]
 				if config.misc.epgratingcountry.value:
 					c = countries[config.misc.epgratingcountry.value]
 				rating = c[self.RATNORMAL].get(age, c[self.RATDEFAULT](age))
@@ -224,21 +215,19 @@ class EventName(Converter, object):
 					elif self.type == self.SRATING:
 						return self.trimText(rating[self.RATSHORT])
 					return resolveFilename(SCOPE_ACTIVE_SKIN, rating[self.RATICON])
-		elif self.type in (self.GENRE, self.GENRELIST):
+		elif self.type == self.GENRE:
 			if not config.usage.show_genre_info.value:
 				return ""
-			genres = event.getGenreDataList()
-			if genres:
-				if self.type == self.GENRE:
-					genres = genres[0:1]
+			genre = event.getGenreData()
+			if genre:
 				rating = event.getParentalData()
 				if rating:
 					country = rating.getCountryCode().upper()
 				else:
-					country = "INT"
+					country = "ETSI"
 				if config.misc.epggenrecountry.value:
 					country = config.misc.epggenrecountry.value
-				return self.separator.join((genretext for genretext in (self.trimText(getGenreStringSub(genre[0], genre[1], country=country)) for genre in genres) if genretext))
+				return self.trimText(getGenreStringSub(genre.getLevel1(), genre.getLevel2(), country=country))
 		elif self.type == self.NAME_NOW:
 			return pgettext("now/next: 'now' event label", "Now") + ": " + self.trimText(event.getEventName())
 		elif self.type == self.SHORT_DESCRIPTION:
@@ -249,14 +238,6 @@ class EventName(Converter, object):
 			return self.formatDescription(event.getShortDescription(), event.getExtendedDescription())
 		elif self.type == self.ID:
 			return self.trimText(event.getEventId())
-		elif self.type == self.EVENT_EXTRADATA:
-			pass
-			#not include yet
-			#ret = event.getExtraEventData()
-		elif self.type == self.EPG_SOURCE:
-			pass
-			#not include yet
-			#ret = event.getEPGSource()
 		elif self.type == self.PDC:
 			if event.getPdcPil():
 				return _("PDC")

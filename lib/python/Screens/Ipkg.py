@@ -10,7 +10,6 @@ class Ipkg(Screen):
 	def __init__(self, session, cmdList=None):
 		if not cmdList: cmdList = []
 		Screen.__init__(self, session)
-		self.setTitle(_("Installing Software..."))
 
 		self.cmdList = cmdList
 
@@ -84,7 +83,7 @@ class Ipkg(Screen):
 		if event == IpkgComponent.EVENT_DOWNLOAD:
 			self.status.setText(_("Downloading"))
 		elif event == IpkgComponent.EVENT_UPGRADE:
-			if self.sliderPackages.has_key(param):
+			if param in self.sliderPackages:
 				self.slider.setValue(self.sliderPackages[param])
 			self.package.setText(param)
 			self.status.setText(_("Upgrading"))

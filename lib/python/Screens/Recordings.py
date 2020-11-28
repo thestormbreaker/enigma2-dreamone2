@@ -3,13 +3,13 @@ from Screens.Setup import setupdom
 from Screens.LocationBox import MovieLocationBox
 from Screens.MessageBox import MessageBox
 from Components.Label import Label
-from Components.config import config, configfile, ConfigYesNo, ConfigNothing, ConfigSelection, getConfigListEntry
+from Components.config import config, configfile, ConfigNothing, ConfigSelection, getConfigListEntry
 from Components.ConfigList import ConfigListScreen
 from Components.ActionMap import ActionMap
 from Components.Pixmap import Pixmap
 from Tools.Directories import fileExists
 from Components.UsageConfig import preferredPath
-from Components.Sources.Boolean import Boolean
+#from Components.Sources.Boolean import Boolean
 from Components.Sources.StaticText import StaticText
 from Components.SystemInfo import SystemInfo
 
@@ -41,16 +41,11 @@ class SetupSummary(Screen):
 			if self.parent.getCurrentEntry().endswith('*'):
 				self.parent['footnote'].text = (_("* = Restart Required"))
 			else:
-				self.parent['footnote'].text = (_(" "))
+				self.parent['footnote'].text = ("")
 
 class RecordingSettings(Screen,ConfigListScreen):
 	def removeNotifier(self):
-		if config.usage.setup_level.notifiers:
-			config.usage.setup_level.notifiers.remove(self.levelChanged)
-
-	def removeNotifierRecordFrontendPriority(self):
-		if config.usage.recording_frontend_priority.notifiers:
-			config.usage.recording_frontend_priority.notifiers.remove(self.levelChanged)
+		config.usage.setup_level.notifiers.remove(self.levelChanged)
 
 	def levelChanged(self, configElement):
 		list = []
@@ -66,18 +61,16 @@ class RecordingSettings(Screen,ConfigListScreen):
 			self.setup_title = x.get("title", "").encode("UTF-8")
 			self.seperation = int(x.get('separation', '0'))
 
-	def __init__(self, session):
-		from Components.Sources.StaticText import StaticText
+	def __init__(self, session, menu_path=""):
 		Screen.__init__(self, session)
 		self.skinName = "Setup"
+		self.menu_path = menu_path
+		self["menu_path_compressed"] = StaticText()
 		self['footnote'] = Label()
-		self["HelpWindow"] = Pixmap()
-		self["HelpWindow"].hide()
-		self["VKeyIcon"] = Boolean(False)
 
 		self["key_red"] = StaticText(_("Cancel"))
 		self["key_green"] = StaticText(_("Save"))
-		self["description"] = Label(_(""))
+		self["description"] = Label("")
 
 		self.onChangedEntry = [ ]
 		self.setup = "recording"
@@ -150,7 +143,6 @@ class RecordingSettings(Screen,ConfigListScreen):
 		else:
 			self.default_entry = getConfigListEntry(_("Movie location"), self.default_dirname, _("Set the default location for your recordings. Press 'OK' to add new locations, select left/right to select an existing location."))
 			list.append(self.default_entry)
-			self.timer_entry = self.instantrec_entry = None
 
 		self.refill(list)
 		self["config"].setList(list)
@@ -158,35 +150,26 @@ class RecordingSettings(Screen,ConfigListScreen):
 			self["config"].list.sort()
 
 	def layoutFinished(self):
-		self.setTitle(_(self.setup_title))
+		if config.usage.show_menupath.value == 'large' and self.menu_path:
+			title = self.menu_path + _(self.setup_title)
+			self["menu_path_compressed"].setText("")
+		elif config.usage.show_menupath.value == 'small':
+			title = _(self.setup_title)
+			self["menu_path_compressed"].setText(self.menu_path + " >" if not self.menu_path.endswith(' / ') else self.menu_path[:-3] + " >" or "")
+		else:
+			title = _(self.setup_title)
+			self["menu_path_compressed"].setText("")
+		self.setup_title = title
+		self.setTitle(title)
 
-	# for summary:
 	def changedEntry(self):
-		self.item = self["config"].getCurrent()
-		if self["config"].getCurrent()[0] == _("Default movie location") or self["config"].getCurrent()[0] == _("Timer record location") or self["config"].getCurrent()[0] == _("Instant record location") or self["config"].getCurrent()[0] == _("Movie location"):
+		if self["config"].getCurrent()[0] in (_("Default movie location"), _("Timer record location"), _("Instant record location"), _("Movie location")):
 			self.checkReadWriteDir(self["config"].getCurrent()[1])
-		for x in self.onChangedEntry:
-			x()
-		try:
-			if isinstance(self["config"].getCurrent()[1], ConfigYesNo) or isinstance(self["config"].getCurrent()[1], ConfigSelection):
-				self.createSetup()
-		except:
-			pass
-
-	def getCurrentEntry(self):
-		return self["config"].getCurrent() and self["config"].getCurrent()[0] or ""
-
-	def getCurrentValue(self):
-		return self["config"].getCurrent() and str(self["config"].getCurrent()[1].getText()) or ""
-
-	def getCurrentDescription(self):
-		return self["config"].getCurrent() and len(self["config"].getCurrent()) > 2 and self["config"].getCurrent()[2] or ""
 
 	def ok(self):
 		currentry = self["config"].getCurrent()
 		self.lastvideodirs = config.movielist.videodirs.value
 		self.lasttimeshiftdirs = config.usage.allowed_timeshift_paths.value
-		self.lastautorecorddirs = config.usage.allowed_autorecord_paths.value
 		if config.usage.setup_level.index >= 2:
 			txt = _("Default movie location")
 		else:
@@ -251,28 +234,7 @@ class RecordingSettings(Screen,ConfigListScreen):
 		config.usage.default_path.save()
 		config.usage.timer_path.save()
 		config.usage.instantrec_path.save()
-		for x in self["config"].list:
-			x[1].save()
-		configfile.save()
-
-	# keySave and keyCancel are just provided in case you need them.
-	# you have to call them by yourself.
-	def keySave(self):
-		self.saveAll()
-		self.close()
-
-	def cancelConfirm(self, result):
-		if not result:
-			return
-		for x in self["config"].list:
-			x[1].cancel()
-		self.close()
-
-	def keyCancel(self):
-		if self["config"].isChanged():
-			self.session.openWithCallback(self.cancelConfirm, MessageBox, _("Really close without saving settings?"), default = False)
-		else:
-			self.close()
+		ConfigListScreen.saveAll(self)
 
 	def createSummary(self):
 		return SetupSummary
@@ -283,20 +245,12 @@ class RecordingSettings(Screen,ConfigListScreen):
 				continue
 			if x.tag == 'item':
 				item_level = int(x.get("level", 0))
-				item_rectunerlevel = int(x.get("rectunerlevel", 0))
 
 				if not self.levelChanged in config.usage.setup_level.notifiers:
 					config.usage.setup_level.notifiers.append(self.levelChanged)
 					self.onClose.append(self.removeNotifier)
-				if not self.levelChanged in config.usage.recording_frontend_priority.notifiers:
-					config.usage.recording_frontend_priority.notifiers.append(self.levelChanged)
-					self.onClose.append(self.removeNotifierRecordFrontendPriority)
 
 				if item_level > config.usage.setup_level.index:
-					continue
-				if item_rectunerlevel == 1 and not config.usage.recording_frontend_priority.value in ("expert_mode", "experimental_mode"):
-					continue
-				if item_rectunerlevel == 2 and not config.usage.recording_frontend_priority.value == "experimental_mode":
 					continue
 
 				requires = x.get("requires")
@@ -321,4 +275,3 @@ class RecordingSettings(Screen,ConfigListScreen):
 				# the second one is converted to string.
 				if not isinstance(item, ConfigNothing):
 					list.append((item_text, item, item_description))
-

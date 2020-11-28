@@ -1,45 +1,55 @@
 from Tools.Profile import profile
 
-profile("LOAD:eRCInput")
-from enigma import eRCInput, eTimer
-
-profile("LOAD:GUIComponent")
-from Components.GUIComponent import GUIComponent
 profile("LOAD:GUISkin")
 from Components.GUISkin import GUISkin
 profile("LOAD:Source")
 from Components.Sources.Source import Source
-
+profile("LOAD:GUIComponent")
+from Components.GUIComponent import GUIComponent
+profile("LOAD:eRCInput")
+from enigma import eRCInput, eTimer
 
 class Screen(dict, GUISkin):
-	NO_SUSPEND, SUSPEND_STOPS, SUSPEND_PAUSES = range(3)
-	ALLOW_SUSPEND = NO_SUSPEND
+
+	False, SUSPEND_STOPS, SUSPEND_PAUSES = range(3)
+	ALLOW_SUSPEND = False
+
 	global_screen = None
 
-	def __init__(self, session, parent=None):
+	def __init__(self, session, parent = None):
 		dict.__init__(self)
 		self.skinName = self.__class__.__name__
 		self.session = session
 		self.parent = parent
 		GUISkin.__init__(self)
-		self.onClose = []
-		self.onFirstExecBegin = []
-		self.onExecBegin = []
-		self.onExecEnd = []
-		self.onShown = []
-		self.onShow = []
-		self.onHide = []
-		self.execing = False
-		self.shown = True
-		self.already_shown = False  # Already shown is false until the screen is really shown (after creation).
-		self.renderer = []
-		self.helpList = []  # In order to support screens *without* a help, we need the list in every screen. how ironic.
-		self.close_on_next_exec = None
-		self.stand_alone = False  # Stand alone screens (for example web screens) don't care about having or not having focus.
-		self.keyboardMode = None
 
-	def __repr__(self):
-		return str(type(self))
+		self.onClose = [ ]
+		self.onFirstExecBegin = [ ]
+		self.onExecBegin = [ ]
+		self.onExecEnd = [ ]
+		self.onShown = [ ]
+
+		self.onShow = [ ]
+		self.onHide = [ ]
+
+		self.execing = False
+
+		self.shown = True
+		# already shown is false until the screen is really shown (after creation)
+		self.already_shown = False
+
+		self.renderer = [ ]
+
+		# in order to support screens *without* a help,
+		# we need the list in every screen. how ironic.
+		self.helpList = [ ]
+
+		self.close_on_next_exec = None
+
+		# stand alone screens (for example web screens)
+		# don't care about having or not having focus.
+		self.stand_alone = False
+		self.keyboardMode = None
 
 	def saveKeyboardMode(self):
 		rcinput = eRCInput.getInstance()
@@ -59,7 +69,7 @@ class Screen(dict, GUISkin):
 			rcinput.setKeyboardMode(self.keyboardMode)
 
 	def execBegin(self):
-		self.active_components = []
+		self.active_components = [ ]
 		if self.close_on_next_exec is not None:
 			tmp = self.close_on_next_exec
 			self.close_on_next_exec = None
@@ -72,45 +82,59 @@ class Screen(dict, GUISkin):
 				x()
 				if not self.stand_alone and self.session.current_dialog != self:
 					return
-			# assert self.session is None, "a screen can only exec once per time"
-			# self.session = session
+
+#			assert self.session == None, "a screen can only exec once per time"
+#			self.session = session
+
 			for val in self.values() + self.renderer:
 				val.execBegin()
 				if not self.stand_alone and self.session.current_dialog != self:
 					return
 				self.active_components.append(val)
+
 			self.execing = True
+
 			for x in self.onShown:
 				x()
 
 	def execEnd(self):
 		active_components = self.active_components
-		# for (name, val) in self.items():
+#		for (name, val) in self.items():
 		self.active_components = []
 		for val in active_components:
 			val.execEnd()
-		# assert self.session is not None, "execEnd on non-execing screen!"
-		# self.session = None
+#		assert self.session != None, "execEnd on non-execing screen!"
+#		self.session = None
 		self.execing = False
 		for x in self.onExecEnd:
 			x()
 
-	def doClose(self):  # Never call this directly - it will be called from the session!
+	# never call this directly - it will be called from the session!
+	def doClose(self):
 		self.hide()
 		for x in self.onClose:
 			x()
-		del self.helpList  # Fixup circular references.
+
+		# fixup circular references
+		del self.helpList
 		GUISkin.close(self)
-		# First disconnect all render from their sources. We might split this out into
-		# a "unskin"-call, but currently we destroy the screen afterwards anyway.
+
+		# first disconnect all render from their sources.
+		# we might split this out into a "unskin"-call,
+		# but currently we destroy the screen afterwards
+		# anyway.
 		for val in self.renderer:
-			val.disconnectAll()  # Disconnect converter/sources and probably destroy them. Sources will not be destroyed.
+			val.disconnectAll()  # disconnected converter/sources and probably destroy them. Sources will not be destroyed.
+
 		del self.session
 		for (name, val) in self.items():
 			val.destroy()
 			del self[name]
-		self.renderer = []
-		self.__dict__.clear()  # Really delete all elements now.
+
+		self.renderer = [ ]
+
+		# really delete all elements now
+		self.__dict__.clear()
 
 	def close(self, *retval):
 		if not self.execing:
@@ -122,7 +146,6 @@ class Screen(dict, GUISkin):
 		self.instance.setFocus(o.instance)
 
 	def show(self):
-		print("[Screen] Showing screen '%s'." % self.skinName)  # To ease identification of screens.
 		if (self.shown and self.already_shown) or not self.instance:
 			return
 		self.shown = True
@@ -149,6 +172,9 @@ class Screen(dict, GUISkin):
 		if self.instance:
 			self.instance.setAnimationMode(mode)
 
+	def __repr__(self):
+		return str(type(self))
+
 	def getRelatedScreen(self, name):
 		if name == "session":
 			return self.session.screen
@@ -156,7 +182,8 @@ class Screen(dict, GUISkin):
 			return self.parent
 		elif name == "global":
 			return self.global_screen
-		return None
+		else:
+			return None
 
 	def callLater(self, function):
 		self.__callLaterTimer = eTimer()

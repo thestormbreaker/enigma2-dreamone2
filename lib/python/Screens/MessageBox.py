@@ -25,7 +25,7 @@ class MessageBox(Screen, HelpableScreen):
 		TYPE_MESSAGE: _("Message")
 	}
 
-	def __init__(self, session, text, type=TYPE_YESNO, timeout=0, close_on_any_key=False, default=True, enable_input=True, msgBoxID=None, picon=True, simple=False, wizard=False, list=None, skin_name=None, timeout_default=None, title=None, windowTitle=None, showYESNO=False):
+	def __init__(self, session, text, type=TYPE_YESNO, timeout=0, close_on_any_key=False, default=True, enable_input=True, msgBoxID=None, picon=True, simple=False, wizard=False, list=None, skin_name=None, timeout_default=None, title=None):
 		Screen.__init__(self, session)
 		HelpableScreen.__init__(self)
 		if text:
@@ -69,7 +69,7 @@ class MessageBox(Screen, HelpableScreen):
 			# These five lines can go with new skins that only use self["icon"]...
 			if self.type == self.TYPE_YESNO:
 				self["QuestionPixmap"].show()
-			elif self.type == self.TYPE_INFO or self.type == self.TYPE_WARNING:
+			elif self.type == self.TYPE_INFO:
 				self["InfoPixmap"].show()
 			elif self.type == self.TYPE_ERROR:
 				self["ErrorPixmap"].show()
@@ -87,7 +87,7 @@ class MessageBox(Screen, HelpableScreen):
 			self.skinName = [skin_name] + self.skinName
 		if not list:
 			list = []
-		if type == self.TYPE_YESNO or showYESNO:
+		if type == self.TYPE_YESNO:
 			if list:
 				self.list = list
 			elif default:
@@ -97,7 +97,7 @@ class MessageBox(Screen, HelpableScreen):
 		else:
 			self.list = []
 		self.timeout_default = timeout_default
-		self.baseTitle = title or windowTitle or self.TYPE_PREFIX.get(self.type, None)
+		self.baseTitle = title
 		self.activeTitle = None
 		# DEBUG: This is a temporary patch to stop the VuRemote and GigaBlueRemote plugins from crashing!
 		# If this code is accepted then the offending lines from the plugins can safely be removed.

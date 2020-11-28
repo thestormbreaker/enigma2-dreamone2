@@ -1,28 +1,28 @@
 import glob
 import shutil
 import subprocess
+import tempfile
 
-from os import mkdir, path, rmdir, rename, remove, stat
+from os import mkdir, path, rmdir, rename, remove, sep, stat
 
-from boxbranding import getMachineBuild, getMachineMtdRoot, getBoxType, getMachineName
+from boxbranding import getMachineBuild, getMachineMtdRoot
 from Components.Console import Console
 from Components.SystemInfo import SystemInfo
-from Tools.Directories import pathExists
 
-Imagemount = "/tmp/multibootcheck"
+class tmp:
+	dir = None
 
 def getMBbootdevice():
-	if not path.isdir(Imagemount):
-		mkdir(Imagemount)
-	for device in ('/dev/block/by-name/bootoptions', '/dev/mmcblk0p1', '/dev/mmcblk1p1', '/dev/mmcblk0p3', '/dev/mmcblk0p4'):
+	tmp.dir = tempfile.mkdtemp(prefix="Multiboot")
+	for device in ("/dev/block/by-name/bootoptions", "/dev/mmcblk0p1", "/dev/mmcblk1p1", "/dev/mmcblk0p3", "/dev/mmcblk0p4"):
 		if path.exists(device):
-			Console().ePopen("mount %s %s" % (device, Imagemount))
-			if path.isfile(path.join(Imagemount, "STARTUP")):
-				print '[Multiboot] Startupdevice found:', device
+			Console().ePopen("mount %s %s" % (device, tmp.dir))
+			if path.isfile(path.join(tmp.dir, "STARTUP")):
+				print "[Multiboot] [getMBbootdevices] Bootdevice found: %s" % device
 				return device
-			Console().ePopen("umount %s" % Imagemount)
-	if not path.ismount(Imagemount):
-		rmdir(Imagemount)
+			Console().ePopen("umount %s" % tmp.dir)
+	if not path.ismount(tmp.dir):
+		rmdir(tmp.dir)
 
 def getparam(line, param):
 	return line.rsplit("%s=" % param, 1)[1].split(" ", 1)[0]
@@ -30,10 +30,7 @@ def getparam(line, param):
 def getMultibootslots():
 	bootslots = {}
 	if SystemInfo["MBbootdevice"]:
-		if not path.isdir(Imagemount):
-			mkdir(Imagemount)
-		Console().ePopen("/bin/mount %s %s" % (SystemInfo["MBbootdevice"], Imagemount))
-		for file in glob.glob(path.join(Imagemount, "STARTUP_*")):
+		for file in glob.glob(path.join(tmp.dir, "STARTUP_*")):
 			if "STARTUP_RECOVERY" in file:
 				SystemInfo["RecoveryMode"] = True
 				print "[multiboot] [getMultibootslots] RecoveryMode is set to:%s" % SystemInfo["RecoveryMode"]
@@ -44,28 +41,28 @@ def getMultibootslots():
 					# print "Multiboot getMultibootslots readlines = %s " %line
 					if "root=" in line:
 						line = line.rstrip("\n")
-						device = getparam(line, "root")
-						if path.exists(device):
-							slot["device"] = device
+						root = getparam(line, "root")
+						if path.exists(root):
+							slot["root"] = root
 							slot["startupfile"] = path.basename(file)
-							if "sda" in line:
-								slot["kernel"] = "/dev/sda%s" % line.split("sda", 1)[1].split(" ", 1)[0]
-								slot["rootsubdir"] = None
-							else:
-								slot["kernel"] = "%sp%s" % (device.split("p")[0], int(device.split("p")[1]) - 1)
 							if "rootsubdir" in line:
 								SystemInfo["HasRootSubdir"] = True
 								print "[multiboot] [getMultibootslots] HasRootSubdir is set to:%s" % SystemInfo["HasRootSubdir"]
 								slot["rootsubdir"] = getparam(line, "rootsubdir")
 								slot["kernel"] = getparam(line, "kernel")
-
+							elif "sda" in line:
+								slot["kernel"] = getparam(line, "kernel")	# sf8008 SD card slot pairs same as oldsystle MB
+								slot["rootsubdir"] = None
+							else:
+								slot["kernel"] = "%sp%s" % (root.split("p")[0], int(root.split("p")[1]) - 1)	# oldstyle MB kernel = root-1
 						break
 				if slot:
 					bootslots[int(slotnumber)] = slot
-		print "[multiboot1] getMultibootslots bootslots = %s" %bootslots
-		Console().ePopen("umount %s" % Imagemount)
-		if not path.ismount(Imagemount):
-			rmdir(Imagemount)
+		print "[multiboot] [getMultibootslots] Finished bootslots = %s" %bootslots
+		Console().ePopen("umount %s" % tmp.dir)
+		if not path.ismount(tmp.dir):
+			rmdir(tmp.dir)
+	print "[Multiboot] Bootslots found:", bootslots
 	return bootslots
 
 def GetCurrentImage():
@@ -74,9 +71,9 @@ def GetCurrentImage():
 		if slot:
 			return int(slot[0])
 		else:
-			device = getparam(open("/sys/firmware/devicetree/base/chosen/bootargs", "r").read(), "root")
+			root = getparam(open("/sys/firmware/devicetree/base/chosen/bootargs", "r").read(), "root")
 			for slot in SystemInfo["canMultiBoot"].keys():
-				if SystemInfo["canMultiBoot"][slot]["device"] == device:
+				if SystemInfo["canMultiBoot"][slot]["root"] == root:
 					return slot
 def GetCurrentKern():
 	if SystemInfo["HasRootSubdir"]:
@@ -89,124 +86,78 @@ def GetCurrentRoot():
 def GetCurrentImageMode():
 	return bool(SystemInfo["canMultiBoot"]) and SystemInfo["canMode12"] and int(open("/sys/firmware/devicetree/base/chosen/bootargs", "r").read().replace("\0", "").split("=")[-1])
 
-def GetSTARTUPFile():
-	if SystemInfo["HAScmdline"]:
-		return "cmdline.txt"
-	else:
-		return "STARTUP"
-
-def ReadSTARTUP():
-	return SystemInfo["canMultiBoot"] and open('/tmp/startupmount/%s' %GetSTARTUPFile(), 'r').read()
-
-def GetBoxName():
-	box = getBoxType()
-	machinename = getMachineName()
-	if box in ('uniboxhd1', 'uniboxhd2', 'uniboxhd3'):
-		box = "ventonhdx"
-	elif box == 'odinm6':
-		box = getMachineName().lower()
-	elif box == "inihde" and machinename.lower() == "xpeedlx":
-		box = "xpeedlx"
-	elif box in ('xpeedlx1', 'xpeedlx2'):
-		box = "xpeedlx"
-	elif box == "inihde" and machinename.lower() == "hd-1000":
-		box = "sezam-1000hd"
-	elif box == "ventonhdx" and machinename.lower() == "hd-5000":
-		box = "sezam-5000hd"
-	elif box == "ventonhdx" and machinename.lower() == "premium twin":
-		box = "miraclebox-twin"
-	elif box == "xp1000" and machinename.lower() == "sf8 hd":
-		box = "sf8"
-	elif box.startswith('et') and not box in ('et8000', 'et8500', 'et8500s', 'et10000'):
-		box = box[0:3] + 'x00'
-	elif box == 'odinm9':
-		box = 'maram9'
-	elif box.startswith('sf8008m'):
-		box = "sf8008m"
-	elif box.startswith('sf8008'):
-		box = "sf8008"
-	elif box.startswith('twinboxlcdci'):
-		box = "twinboxlcd"
-	return box
-
-class GetImagelist():
-	MOUNT = 0
-	UNMOUNT = 1
-
-	def __init__(self, callback):
-		if SystemInfo["canMultiBoot"]:
-			self.slots = sorted(SystemInfo["canMultiBoot"].keys())
-			self.callback = callback
-			self.imagelist = {}
-			if not path.isdir(Imagemount):
-				mkdir(Imagemount)
-			self.container = Console()
-			self.phase = self.MOUNT
-			self.run()
-		else:
-			callback({})
-
-	def run(self):
-		if self.phase == self.UNMOUNT:
-			self.container.ePopen("umount %s" % Imagemount, self.appClosed)
-		else:
-			self.slot = self.slots.pop(0)
-			self.container.ePopen("mount %s %s" % (SystemInfo["canMultiBoot"][self.slot]["device"], Imagemount), self.appClosed)
-
-	def appClosed(self, data="", retval=0, extra_args=None):
+def GetImagelist():
+	Imagelist = {}
+	tmp.dir = tempfile.mkdtemp(prefix="Multiboot")
+	for slot in sorted(SystemInfo["canMultiBoot"].keys()):
+		Console().ePopen("mount %s %s" % (SystemInfo["canMultiBoot"][slot]["root"], tmp.dir))
 		BuildVersion = "  "
 		Build = " "  # ViX Build No.
 		Dev = " "  # ViX Dev No.
 		Creator = " "  # Openpli Openvix Openatv etc
 		Date = " "
 		BuildType = " "  # release etc
-		if retval:
-			self.imagelist[self.slot] = {"imagename": _("Empty slot")}
-		if retval == 0 and self.phase == self.MOUNT:
-			if SystemInfo["HasRootSubdir"] and SystemInfo["canMultiBoot"][self.slot]["rootsubdir"] != None:
-				imagedir = ('%s/%s' %(Imagemount, SystemInfo["canMultiBoot"][self.slot]["rootsubdir"]))
+		Imagelist[slot] = {"imagename": _("Empty slot")}
+		imagedir = sep.join(filter(None, [tmp.dir, SystemInfo["canMultiBoot"][slot].get("rootsubdir", "")]))
+		if path.isfile(path.join(imagedir, "usr/bin/enigma2")):
+		# print "[multiboot] [GetImagelist] 2 slot = %s imagedir = %s" % (slot, imagedir)
+			Creator = open("%s/etc/issue" % imagedir).readlines()[-2].capitalize().strip()[:-6]
+			if Creator.startswith("Openvix"):
+				Creator = Creator.replace("-release", " rel")
+				reader = boxbranding_reader(imagedir)
+				BuildType = reader.getImageType()
+				Build = reader.getImageBuild()
+				Dev = BuildType != "release" and " %s" % reader.getImageDevBuild() or ""
+				BuildVersion = "%s %s %s %s" % (Creator, BuildType[0:3], Build, Dev)
 			else:
-				imagedir = Imagemount
-			if path.isfile("%s/usr/bin/enigma2" % imagedir):
-				Creator = open("%s/etc/issue" % imagedir).readlines()[-2].capitalize().strip()[:-6].replace("-release", " rel")
-				if Creator.startswith("Openvix"):
-					reader = boxbranding_reader(imagedir)
-					BuildType = reader.getImageType()
-					Build = reader.getImageBuild()
-					Dev = BuildType != "release" and " %s" % reader.getImageDevBuild() or ""
-					BuildVersion = "%s %s %s %s" % (Creator, BuildType[0:3], Build, Dev)
-				else:
-					try:
-						from datetime import datetime
-						date = datetime.fromtimestamp(stat(path.join(imagedir, "var/lib/opkg/status")).st_mtime).strftime("%Y-%m-%d")
-						if date.startswith("1970"):
-							date = datetime.fromtimestamp(stat(path.join(imagedir, "usr/share/bootlogo.mvi")).st_mtime).strftime("%Y-%m-%d")
-						date = max(date, datetime.fromtimestamp(stat(path.join(imagedir, "usr/bin/enigma2")).st_mtime).strftime("%Y-%m-%d"))
-					except Exception:
-						date = _("Unknown")
-					BuildVersion = "%s (%s)" % (open(path.join(imagedir, "etc/issue")).readlines()[-2].capitalize().strip()[:-6], date)
-				self.imagelist[self.slot] = {"imagename": "%s" % BuildVersion}
-			else:
-				self.imagelist[self.slot] = {"imagename": _("Empty slot")}
-			if self.slots and SystemInfo["canMultiBoot"][self.slot]["device"] == SystemInfo["canMultiBoot"][self.slots[0]]["device"]:
-				self.slot = self.slots.pop(0)
-				self.appClosed()
-			else:
-				self.phase = self.UNMOUNT
-				self.run()
-		elif self.slots:
-			self.phase = self.MOUNT
-			self.run()
-		else:
-			self.container.killAll()
-			if not path.ismount(Imagemount):
-				rmdir(Imagemount)
-			self.callback(self.imagelist)
+				try:
+					from datetime import datetime
+					date = datetime.fromtimestamp(stat(path.join(imagedir, "var/lib/opkg/status")).st_mtime).strftime("%Y-%m-%d")
+					if date.startswith("1970"):
+						date = datetime.fromtimestamp(stat(path.join(imagedir, "usr/share/bootlogo.mvi")).st_mtime).strftime("%Y-%m-%d")
+					date = max(date, datetime.fromtimestamp(stat(path.join(imagedir, "usr/bin/enigma2")).st_mtime).strftime("%Y-%m-%d"))
+				except Exception:
+					date = _("Unknown")
+				Creator = Creator.replace("-release", " ")
+				BuildVersion = "%s Image Date: %s" % (Creator, date)
+			Imagelist[slot] = {"imagename": "%s" % BuildVersion}
+		elif path.isfile(path.join(imagedir, "usr/bin/enigmax")):
+			Imagelist[slot] = { "imagename": _("Deleted image") }
+		Console().ePopen("umount %s" % tmp.dir)
+	if not path.ismount(tmp.dir):
+		rmdir(tmp.dir)
+	return Imagelist
 
+
+def emptySlot(slot):
+	tmp.dir = tempfile.mkdtemp(prefix="Multiboot")
+	Console().ePopen("mount %s %s" % (SystemInfo["canMultiBoot"][slot]["root"], tmp.dir))
+	imagedir = sep.join(filter(None, [tmp.dir, SystemInfo["canMultiBoot"][slot].get("rootsubdir", "")]))
+	if path.isfile(path.join(imagedir, "usr/bin/enigma2")):
+		rename((path.join(imagedir, "usr/bin/enigma2")), (path.join(imagedir, "usr/bin/enigmax")))
+		ret = 0
+	else:
+		print "[multiboot2] NO enigma2 found to rename"
+		ret = 4
+	Console().ePopen("umount %s" % tmp.dir)
+	if not path.ismount(tmp.dir):
+		rmdir(tmp.dir)
+	return	ret
+
+def restoreSlots():
+	for slot in SystemInfo["canMultiBoot"]:
+		tmp.dir = tempfile.mkdtemp(prefix="Multiboot")
+		Console().ePopen("mount %s %s" % (SystemInfo["canMultiBoot"][slot]["root"], tmp.dir))
+		imagedir = sep.join(filter(None, [tmp.dir, SystemInfo["canMultiBoot"][slot].get("rootsubdir", "")]))
+		if path.isfile(path.join(imagedir, "usr/bin/enigmax")):
+			rename((path.join(imagedir, "usr/bin/enigmax")), (path.join(imagedir, "usr/bin/enigma2")))
+		Console().ePopen("umount %s" % tmp.dir)
+	if not path.ismount(tmp.dir):
+		rmdir(tmp.dir)
 
 class boxbranding_reader:  # Many thanks to Huevos for creating this reader - well beyond my skill levels!
 	def __init__(self, OsPath):
-		if pathExists("%s/usr/lib64" % OsPath):
+		if path.exists("%s/usr/lib64" % OsPath):
 			self.branding_path = "%s/usr/lib64/enigma2/python/" % OsPath
 		else:
 			self.branding_path = "%s/usr/lib/enigma2/python/" % OsPath
@@ -291,45 +242,3 @@ class boxbranding_reader:  # Many thanks to Huevos for creating this reader - we
 		out.append("print output")
 		out.append("")
 		return "\n".join(out)
-
-
-class EmptySlot():
-	MOUNT = 0
-	UNMOUNT = 1
-
-	def __init__(self, Contents, callback):
-		if SystemInfo["canMultiBoot"]:
-			self.slots = sorted(SystemInfo["canMultiBoot"].keys())
-			self.callback = callback
-			self.imagelist = {}
-			self.slot = Contents
-			if not path.isdir(Imagemount):
-				mkdir(Imagemount)
-			self.container = Console()
-			self.phase = self.MOUNT
-			self.run()
-		else:
-			callback({})
-
-	def run(self):
-		if self.phase == self.UNMOUNT:
-			self.container.ePopen("umount %s" % Imagemount, self.appClosed)
-		else:
-			self.container.ePopen("mount %s %s" % (SystemInfo["canMultiBoot"][self.slot]["device"], Imagemount), self.appClosed)
-
-	def appClosed(self, data="", retval=0, extra_args=None):
-		if retval == 0 and self.phase == self.MOUNT:
-			if SystemInfo["HasRootSubdir"] and SystemInfo["canMultiBoot"][self.slot]["rootsubdir"] != None:
-				imagedir = ('%s/%s' %(Imagemount, SystemInfo["canMultiBoot"][self.slot]["rootsubdir"]))
-			else:
-				imagedir = Imagemount
-			if path.isfile("%s/usr/bin/enigma2"%imagedir):
-				rename("%s/usr/bin/enigma2" %imagedir, "%s/usr/bin/enigmax.bin" %imagedir)
-				rename("%s/etc" %imagedir, "%s/etcx" %imagedir)
-			self.phase = self.UNMOUNT
-			self.run()
-		else:
-			self.container.killAll()
-			if not path.ismount(Imagemount):
-				rmdir(Imagemount)
-			self.callback()

@@ -64,7 +64,7 @@ class DefaultServicesScannerPlugin(ScanSetup):
 		# backup lamedb
 		confdir = resolveFilename(SCOPE_CONFIG)
 		copyfile(confdir + "/lamedb", confdir + "/lamedb.backup")
-		self.scan_type.setValue("multisat")
+		self.scan_type.value = "multisat"
 		self.createSetup()
 		self.scanIndex = 0
 		self.selectSat(0)
@@ -73,9 +73,9 @@ class DefaultServicesScannerPlugin(ScanSetup):
 	def selectSat(self, index):
 		for satindex in range(len(self.multiscanlist)):
 			if satindex != index:
-				self.multiscanlist[satindex][1].setValue(False)
+				self.multiscanlist[satindex][1].value = False
 			else:
-				self.multiscanlist[satindex][1].setValue(True)
+				self.multiscanlist[satindex][1].value = True
 
 	def runScan(self):
 		print "runScan"
@@ -134,4 +134,4 @@ def DefaultServicesScannerMain(session, **kwargs):
 	session.open(DefaultServicesScannerPlugin)
 
 def Plugins(**kwargs):
-	return PluginDescriptor(name=_("Default Services Scanner"), description=_("Scans default lamedbs sorted by satellite with a connected dish positioner"), where = PluginDescriptor.WHERE_PLUGINMENU, needsRestart = False, fnc=DefaultServicesScannerMain)
+	return PluginDescriptor(name="Default Services Scanner", description=_("Scans default lamedbs sorted by satellite with a connected dish positioner"), where = PluginDescriptor.WHERE_PLUGINMENU, needsRestart = False, fnc=DefaultServicesScannerMain)

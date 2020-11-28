@@ -1,9 +1,8 @@
 from Wizard import wizardManager
 from Screens.WizardLanguage import WizardLanguage
+from Screens.WizardUserInterfacePositioner import UserInterfacePositionerWizard
 from Screens.VideoWizard import VideoWizard
 from Screens.Rc import Rc
-from Screens.Screen import Screen
-
 from boxbranding import getBoxType
 
 from Components.Pixmap import Pixmap
@@ -21,10 +20,6 @@ class StartWizard(WizardLanguage, Rc):
 		WizardLanguage.__init__(self, session, showSteps = False)
 		Rc.__init__(self)
 		self["wizard"] = Pixmap()
-		self["HelpWindow"] = Pixmap()
-		self["HelpWindow"].hide()
-		#Screen.setTitle(self, _("Welcome..."))
-		Screen.setTitle(self, _("StartWizard"))
 
 	def markDone(self):
 		# setup remote control, all stb have same settings except dm8000 which uses a different settings
@@ -38,12 +33,7 @@ class StartWizard(WizardLanguage, Rc):
 		config.misc.firstrun.save()
 		configfile.save()
 
-
-# mytest.py#L528ff - RestoreSettings
-wizardManager.registerWizard(VideoWizard, config.misc.videowizardenabled.value, priority = 0)
-wizardManager.registerWizard(LanguageWizard, config.misc.languageselected.value, priority = 2)
-# FrontprocessorUpgrade FPUpgrade priority = 8
-# FrontprocessorUpgrade SystemMessage priority = 9
+wizardManager.registerWizard(VideoWizard, config.misc.videowizardenabled.value, priority = 5)
+wizardManager.registerWizard(LanguageWizard, config.misc.languageselected.value, priority = 10)
+wizardManager.registerWizard(UserInterfacePositionerWizard, config.misc.firstrun.value, priority = 15)
 wizardManager.registerWizard(StartWizard, config.misc.firstrun.value, priority = 20)
-# StartWizard calls InstallWizard
-# NetworkWizard priority = 25

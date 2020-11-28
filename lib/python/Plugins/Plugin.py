@@ -68,16 +68,12 @@ class PluginDescriptor:
 	WHERE_NETWORKMOUNTS = 17
 
 	WHERE_VIXMENU = 18
+	
+	WHERE_SATCONFIGCHANGED = 19
 
-	# override internal RecordTimer navigation instance
-	# fnc must return the custom instance or None to skip it
-	WHERE_RECORDTIMER = 19
+	WHERE_SERVICESCAN = 20
 
-	WHERE_SATCONFIGCHANGED = 20
-
-	WHERE_SERVICESCAN = 21
-
-	WHERE_EXTENSIONSINGLE = 22
+	WHERE_EXTENSIONSINGLE = 21
 
 	def __init__(self, name="Plugin", where=None, description="", icon=None, fnc=None, wakeupfnc=None, needsRestart=None, internal=False, weight=0):
 		if not where: where = []

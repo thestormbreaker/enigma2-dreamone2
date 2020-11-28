@@ -6,7 +6,6 @@ from Components.VariableText import VariableText
 import time
 import os
 import enigma
-from enigma import pNavigation
 
 def getTrashFolder(path=None):
 	# Returns trash folder without symlinks
@@ -15,17 +14,20 @@ def getTrashFolder(path=None):
 			print 'path is none'
 			return ""
 		else:
+			trashcan = Harddisk.findMountPoint(os.path.realpath(path))
 			if '/movie' in path:
-				mountpoint = Harddisk.findMountPoint(os.path.realpath(path))
-				trashcan = os.path.join(mountpoint, 'movie')
-			else:
-				trashcan = Harddisk.findMountPoint(os.path.realpath(path))
+				trashcan = os.path.join(trashcan, 'movie')
+			elif config.usage.default_path.value in path:
+				# if default_path happens to not be the default /hdd/media/movie, then we can have a trash folder there instead
+				trashcan = os.path.join(trashcan, config.usage.default_path.value)
 			return os.path.realpath(os.path.join(trashcan, ".Trash"))
 	except:
 		return None
 
 def createTrashFolder(path=None):
+	print '[TRASHCAN DeBug path]', path
 	trash = getTrashFolder(path)
+	print '[TRASHCAN DeBug]', trash
 	if trash and os.access(os.path.split(trash)[0], os.W_OK):
 		if not os.path.isdir(trash):
 			try:
@@ -55,7 +57,7 @@ class Trashcan:
 		self.gotRecordEvent(None, None)
 
 	def gotRecordEvent(self, service, event):
-		self.recordings = len(self.session.nav.getRecordings(False,pNavigation.isRealRecording))
+		from RecordTimer import n_recordings
 		if event == enigma.iRecordableService.evEnd:
 			self.cleanIfIdle()
 
@@ -70,10 +72,17 @@ class Trashcan:
 	def cleanIfIdle(self):
 		# RecordTimer calls this when preparing a recording. That is a
 		# nice moment to clean up.
-		if self.recordings:
-			print "[Trashcan] Recording in progress", self.recordings
+		from RecordTimer import n_recordings
+		if n_recordings > 0:
+			print "[Trashcan] Recording(s) in progress:", n_recordings
 			return
-		ctimeLimit = time.time() - (config.usage.movielist_trashcan_days.value * 3600 * 24)
+# If movielist_trashcan_days is 0 it means don't timeout anything - 
+# just use the "leave nGB settting"
+#
+		if (config.usage.movielist_trashcan_days.value > 0):
+			ctimeLimit = time.time() - (config.usage.movielist_trashcan_days.value * 3600 * 24)
+		else:
+			ctimeLimit = 0
 		reserveBytes = 1024*1024*1024 * int(config.usage.movielist_trashcan_reserve.value)
 		clean(ctimeLimit, reserveBytes)
 
@@ -125,41 +134,41 @@ class CleanTrashTask(Components.Task.PythonTask):
 		self.reserveBytes = reserveBytes
 
 	def work(self):
-		mounts=[]
-		matches = []
+		# add the default movie path
+		trashcanLocations = set([os.path.join(config.usage.default_path.value)])
+
+		# add the root and the movie directory of each mount
 		print "[Trashcan] probing folders"
 		f = open('/proc/mounts', 'r')
 		for line in f.readlines():
 			parts = line.strip().split()
 			if parts[1] == '/media/autofs':
 				continue
-			if config.usage.movielist_trashcan_network_clean.value and parts[1].startswith('/media/net'):
-				mounts.append(parts[1])
-			elif config.usage.movielist_trashcan_network_clean.value and parts[1].startswith('/media/autofs'):
-				mounts.append(parts[1])
-			elif not parts[1].startswith('/media/net') and not parts[1].startswith('/media/autofs'):
-				mounts.append(parts[1])
+			# skip network mounts unless the option to clean them is set
+			if (not config.usage.movielist_trashcan_network_clean.value and
+				(parts[1].startswith('/media/net') or parts[1].startswith('/media/autofs'))):
+				continue
+			# one trashcan in the root, one in movie subdirectory
+			trashcanLocations.add(parts[1])
+			trashcanLocations.add(os.path.join(parts[1], 'movie'))
 		f.close()
 
-		for mount in mounts:
-			if os.path.isdir(os.path.join(mount,'.Trash')):
-				matches.append(os.path.join(mount,'.Trash'))
-			if os.path.isdir(os.path.join(mount,'movie/.Trash')):
-				matches.append(os.path.join(mount,'movie/.Trash'))
-
-		print "[Trashcan] found following trashcan's:",matches
-		if len(matches):
-			for trashfolder in matches:
-				print "[Trashcan] looking in trashcan",trashfolder
+		for trashfolder in trashcanLocations:
+			trashfolder = os.path.join(trashfolder, '.Trash')
+			if os.path.isdir(trashfolder):
+				print "[Trashcan] looking in trashcan", trashfolder
 				trashsize = get_size(trashfolder)
 				diskstat = os.statvfs(trashfolder)
 				free = diskstat.f_bfree * diskstat.f_bsize
 				bytesToRemove = self.reserveBytes - free
-				print "[Trashcan] " + str(trashfolder) + ": Size:",trashsize
+				print "[Trashcan] " + str(trashfolder) + ": Size:", '{:,}'.format(trashsize)
 				candidates = []
 				size = 0
 				for root, dirs, files in os.walk(trashfolder, topdown=False):
 					for name in files:
+						# Don't delete any per-directory config files from .Trash if the option is in use
+						if (config.movielist.settings_per_directory.value and name == ".e2settings.pkl"):
+							continue
 						try:
 							fn = os.path.join(root, name)
 							st = os.stat(fn)
@@ -189,7 +198,7 @@ class CleanTrashTask(Components.Task.PythonTask):
 							pass
 						bytesToRemove -= st_size
 						size -= st_size
-					print "[Trashcan] " + str(trashfolder) + ": Size now:",size
+					print "[Trashcan] " + str(trashfolder) + ": Size now:", '{:,}'.format(size)
 
 class TrashInfo(VariableText, GUIComponent):
 	FREE = 0

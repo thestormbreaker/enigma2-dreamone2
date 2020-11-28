@@ -1,19 +1,17 @@
-# -*- coding: utf-8 -*-
 from boxbranding import getMachineBrand, getMachineName
 
 from twisted.web import client
-from twisted.internet import reactor, defer, ssl
-
+from twisted.internet import reactor, defer
+from urlparse import urlparse
 
 class HTTPProgressDownloader(client.HTTPDownloader):
 	def __init__(self, url, outfile, headers=None):
-		client.HTTPDownloader.__init__(self, url, outfile, headers=headers, agent="Enigma2 HbbTV/1.1.1 (+PVR+RTSP+DL;OpenATV;;;)")
+		client.HTTPDownloader.__init__(self, url, outfile, headers=headers, agent="%s %s Enigma2 HbbTV/1.1.1 (+PVR+RTSP+DL;OpenBh;;;)" % (getMachineBrand(), getMachineName()))
 		self.status = self.progress_callback = self.error_callback = self.end_callback = None
 		self.deferred = defer.Deferred()
 
 	def noPage(self, reason):
 		if self.status == "304":
-			print reason.getErrorMessage()
 			client.HTTPDownloader.page(self, "")
 		else:
 			client.HTTPDownloader.noPage(self, reason)
@@ -22,7 +20,7 @@ class HTTPProgressDownloader(client.HTTPDownloader):
 
 	def gotHeaders(self, headers):
 		if self.status == "200":
-			if headers.has_key("content-length"):
+			if "content-length" in headers:
 				self.totalbytes = int(headers["content-length"][0])
 			else:
 				self.totalbytes = 0
@@ -44,23 +42,16 @@ class HTTPProgressDownloader(client.HTTPDownloader):
 
 class downloadWithProgress:
 	def __init__(self, url, outputfile, contextFactory=None, *args, **kwargs):
-		if hasattr(client, '_parse'):
-			scheme, host, port, path = client._parse(url)
-		else:
-			# _URI class renamed to URI in 15.0.0
- 			try:
- 				from twisted.web.client import _URI as URI
- 			except ImportError:
- 				from twisted.web.client import URI
- 			uri = URI.fromBytes(url)
-			scheme = uri.scheme
-			host = uri.host
-			port = uri.port
-			path = uri.path
-
+		parsed = urlparse(url)
+		scheme = parsed.scheme
+		host = parsed.hostname
+		port = parsed.port or (443 if scheme == 'https' else 80)
 		self.factory = HTTPProgressDownloader(url, outputfile, *args, **kwargs)
-		if scheme == "https":
-			self.connection = reactor.connectSSL(host, port, self.factory, ssl.ClientContextFactory())
+		if scheme == 'https':
+			from twisted.internet import ssl
+			if contextFactory is None:
+				contextFactory = ssl.ClientContextFactory()
+			self.connection = reactor.connectSSL(host, port, self.factory, contextFactory)
 		else:
 			self.connection = reactor.connectTCP(host, port, self.factory)
 
